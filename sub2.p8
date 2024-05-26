@@ -2,17 +2,17 @@ pico-8 cartridge // http://www.pico-8.com
 version 42
 __lua__
 function _init()
-
-
---debug mouse--
-poke(0x5f2d, 1)
-
- 
- game_state = "play"
-
-
+	
+	
+	--debug mouse--
+	poke(0x5f2d, 1)
+	
+	
+	game_state = "play"
+	
+	
 	surf_lvl = 41
-
+	
 	plr_init()
 	surf_rdr_init()
 	enemy_init()
@@ -23,66 +23,129 @@ poke(0x5f2d, 1)
 	
 	--camera initialization
 	cam = {x = plr.x-64,
-								y = 0}				
+	y = 0}				
 	
 	--enable inverted circfill
 	--add "| 0x1800" to the color
 	poke(0x5f34,0x2)
-
-							
+	
+	
 end
-----------------------------
+
+function torpedo_init()
+    torpedo = {
+        x = enemy.x,
+        y = enemy.y,
+        speed = 1,
+        state = "following",
+        target_x = plr.x,
+        target_y = plr.y
+    }
+end
+
+function enemy_init()
+    enemy = {
+        x = 60 - 63,
+        y = 72 - 63,
+        blp_ts = -1,
+        snr_r = 8,
+        snr_a = 0.25,
+        sonar_cd = 3
+    }
+
+    enemy_tbl = {}
+end
+
 function _update()
+	if game_state == "play" then
+	if plr.mode == "submerged" then
+		plr_sub_ctrl()
+	end
 
-if game_state == "play" then
-    if plr.mode == "submerged" then
-					plr_sub_ctrl()
-    end
+	if plr.mode == "surface" then
+		plr_surf_ctrl()
+		surf_rdr_updt()
+	end
 
-    if plr.mode == "surface" then
-					plr_surf_ctrl()
-					surf_rdr_updt()
+	enemy_init()
+	torpedo_update()
+	end
+
+	if game_state == "over" then
+	if(btnp(🅾️)) _init()
+	end
+end
+
+function torpedo_update()
+    if torpedo and torpedo.state then
+		if abs(torpedo.x - plr.x) < 4 and abs(torpedo.y - plr.y) < 4 then
+            game_state = "over"
+            return  
+        end
+		
+        if torpedo.state == "following" then
+            -- Calculate direction to the player
+            local dx = plr.x - torpedo.x
+            local dy = plr.y - torpedo.y
+            local dist = sqrt(dx * dx + dy * dy)
+        
+            if dist < 12 then
+                -- Switch to fixed trajectory
+                torpedo.state = "fixed"
+                torpedo.dir_x = dx / dist
+                torpedo.dir_y = dy / dist
+            else
+                -- Move towards the player
+                torpedo.x = torpedo.x + dx / dist * torpedo.speed
+                torpedo.y = torpedo.y + dy / dist * torpedo.speed
+            end
+        elseif torpedo.state == "fixed" then
+            -- Continue in the same direction
+            torpedo.x = torpedo.x + torpedo.dir_x * torpedo.speed
+            torpedo.y = torpedo.y + torpedo.dir_y * torpedo.speed
+        end
     end
 end
 
-if game_state == "over" then
-    if(btnp(🅾️)) _init()
-end    
-    
-----------------------------
-   
+
+
+
+function torpedo_rndr()
+    if torpedo then
+        circfill(torpedo.x, torpedo.y, 3, 8)
+    end
 end
 
 function _draw()
 
-if game_state == "play" then
+	if game_state == "play" then
 	if plr.mode == "submerged" then
 		cls(12)
-		plr_sub_rndr()		
+		plr_sub_rndr()
 		sonar_rndr()
+		torpedo_rndr()
 
-		if(btnp(🅾️)) sonar(plr.x,plr.y)
+		if(btnp(🅾️)) sonar(plr.x, plr.y)
 		plr_coll()
 	end
 
-
 	if plr.mode == "surface" then
-	 cls()
-	 plr_surf_rndr()
-	 surf_rdr_rndr()
+			cls()
+			plr_surf_rndr()
+			surf_rdr_rndr()
+		end
 	end
-end
 
-if game_state == "over" then
-	cls()
+	if game_state == "over" then
+		cls()
+		camera()
+		print("game over", 48, 58, 2)
+		print("press 🅾️ to restart", 28, 68)
+	end
+
 	camera()
-	print("game over",48,58,2)
-	print("press 🅾️ to restart",28,68)
-end
-
-camera()
-spr(0,stat(32),stat(33))
-print("mouse: "..stat(32).." "..stat(33),30,120,6)
+	spr(0, stat(32), stat(33))
+	print("mouse: "..stat(32).." "..stat(33), 30, 120, 6)
 
 end
 -->8
@@ -113,17 +176,17 @@ function surf_rdr_init()
 rdr={x=63,
 					y=100,
 					angl=1,
-     r=13}
+    r=13}
 rdr_lines={}
 
 rdr_gap_tbl={{-4,10},
-             {-4,-10},
-             {4,-10},
-             {4,10},
-             {-10,4},
-             {-10,-4},
-             {10,-4},
-             {10,4}}
+            {-4,-10},
+            {4,-10},
+            {4,10},
+            {-10,4},
+            {-10,-4},
+            {10,-4},
+            {10,4}}
 end
 
 
@@ -141,11 +204,11 @@ function plr_coll()
 	local hit = false
 
 	for prb in all(prb_tbl) do
-	 col = fget(mget(
+	col = fget(mget(
 							flr(prb.x/8),
 							flr((prb.y)/8),
 							8)) ==1
-	 pset(prb.x,prb.y,8)
+	pset(prb.x,prb.y,8)
 		if(col) hit = true
 	end
 	if(hit) game_state = "over"
@@ -155,8 +218,8 @@ end
 
 
 function sonar(x,y)
- y =flr(y/8)
- x =flr((x-63)/8)
+y =flr(y/8)
+x =flr((x-63)/8)
 	
 	local ts = time()
 	local delay = 0
@@ -166,15 +229,15 @@ function sonar(x,y)
 
 	for k=x,x+15 do add (x_tbl,k) end
 	for l in all(x_tbl) do add(x_bag, l) end
- 
- 	for j = y,y+15 do
-	 delay+=0.2
+
+	for j = y,y+15 do
+		delay+=0.2
 --only way to clone table...
-	 	for i in all(x_bag) do
+	for i in all(x_bag) do
 				hit = fget(mget(i,j))==1
 				if (hit) then
-			 	add(sonar_tbl,{i=i,j=j,ts=ts+delay})
-			 	del(x_bag,i)
+					add(sonar_tbl,{i=i,j=j,ts=ts+delay})
+					del(x_bag,i)
 					goto continue
 				end
 			::continue::
@@ -188,18 +251,18 @@ end
 
 function plr_surf_ctrl()
 
- if(btn(➡️)) then
+if(btn(➡️)) then
 		plr.surf_x+=1
 	elseif(btn(⬅️)) then
 		plr.surf_x-=1
- end
- 
- if btn(⬇️) then
-  plr.y = surf_lvl
-  --give it a buff when diving
-  plr.spd_y = plr.acc_y*2
-  plr.mode = "submerged"
- end
+end
+
+if btn(⬇️) then
+	plr.y = surf_lvl
+	plr.spd_y = plr.acc_y*2
+	--give it a buff when diving
+	plr.mode = "submerged"
+end
 
 end
 
@@ -222,10 +285,28 @@ function surf_rdr_updt()
 end
 
 
+function torpedo_init()
+    local distance = 50  -- Adjust this distance as needed
+    local angle = rnd(1) * 2  -- Generate a random angle between 0 and 2 (radians)
+    torpedo = {
+        x = plr.x + cos(angle) * distance,
+        y = plr.y + sin(angle) * distance,
+        speed = 1,
+        state = "following",
+        target_x = plr.x,
+        target_y = plr.y
+    }
+end
+
 
 --------submerged------------
 
 function plr_sub_ctrl()
+
+
+    if(btn(4)) then -- Button "Z" to launch torpedo
+    	torpedo_init() -- Call function to launch torpedo
+    end
 
 	--calc accell horiz.
 	if(btn(➡️)) then
@@ -272,12 +353,12 @@ function plr_sub_ctrl()
 		plr.flp = true
 	end
 	
- if plr.y < surf_lvl  
- and plr.mode == "submerged" then
-  plr.mode = "surface"
-  --reset camera to render properly	
+if plr.y < surf_lvl  
+and plr.mode == "submerged" then
+	plr.mode = "surface"
+	--reset camera to render properly	
 		camera()
- end
+end
 	
 end
 
@@ -301,7 +382,7 @@ function sonar_rndr()
 					snr.i*8+8,
 					snr.j*8,
 					clr)
-	   end
+	end
 
 --				if(snr.ts+snr_dur/2<time()) clr = 3
 				if(snr.ts+snr_dur<time()) del(sonar_tbl,snr)
@@ -322,18 +403,18 @@ function bbl_rndr(x,y,spd,flp)
 	if (plr.flp == false) _x-=4
 	
 
-	 add(ptcl_bbl,{x=_x,
+	add(ptcl_bbl,{x=_x,
                 y=_y,
                 ogx = _x,
                 ogy = _y})
- end 
- 
- for bbl in all(ptcl_bbl) do
+end 
+
+	for bbl in all(ptcl_bbl) do
 		prev_bbly = bbl.y
-	 bbl.y-=0.5
-	 if(flr(prev_bbly)>flr(bbl.y)) bbl.x+=rnd({-1,1})
-	 pset(bbl.x, bbl.y,7)
-	 if (bbl.y < bbl.ogy -5)	del(ptcl_bbl,bbl)
+		bbl.y-=0.5
+		if(flr(prev_bbly)>flr(bbl.y)) bbl.x+=rnd({-1,1})
+		pset(bbl.x, bbl.y,7)
+		if (bbl.y < bbl.ogy -5)	del(ptcl_bbl,bbl)
 	end
 end
 
@@ -344,11 +425,11 @@ end
 
 function plr_sub_rndr()
 
- cam.x = plr.x-64
+cam.x = plr.x-64
 --camera needs to move 1st
 --to avoid stutter
- camera(cam.x,cam.y)
- map()
+camera(cam.x,cam.y)
+map()
 bbl_rndr(plr.x,plr.y,plr.spd_x,plr.flp)
 	fillp(░)
 	circfill(plr.x,plr.y,12,1 | 0x1800)
@@ -373,33 +454,33 @@ local lck_clr = 2
 
 --subm lvls will be line 1
 --surf lvls will be line 2
- camera(plr.surf_x,0)
- map(0,16,0,4)
- spr(26,80,59,2,1)
+camera(plr.surf_x,0)
+map(0,16,0,4)
+spr(26,80,59,2,1)
 
 
 --scope: prob after map
 --and before ui
 --
- 
+
 ------ui pannels-------
- camera()
- circfill(63,63,14,5 | 0x1800)
- circ(63,63,14,6)
- circ(63,63,15,7)
- --top left
- line(0,0,52,52,6)
- line(1,0,53,52,7)
- --bottom right
- line(74,74,127,127,6)
- line(74,73,128,127,7)
+camera()
+circfill(63,63,14,5 | 0x1800)
+circ(63,63,14,6)
+circ(63,63,15,7)
+--top left
+line(0,0,52,52,6)
+line(1,0,53,52,7)
+--bottom right
+line(74,74,127,127,6)
+line(74,73,128,127,7)
 
 --bottom left
- line(0,126,52,74,7)
- line(0,127,53,74,6)
+line(0,126,52,74,7)
+line(0,127,53,74,6)
 --top right
- line(74,52,126,0,7)
- line(74,53,127,0,6)
+line(74,52,126,0,7)
+line(74,53,127,0,6)
 
 
 if (locked) lck_clr = 8
@@ -411,16 +492,16 @@ if (locked) lck_clr = 8
 	
 	--recticle
 	fillp(▒)
- line(53,63,73,63,11)
- line(63,53,63,73,11)	
- fillp()
+line(53,63,73,63,11)
+line(63,53,63,73,11)	
+fillp()
 end
 
 ---------------------------
 
 function surf_rdr_rndr()
 
- --borders
+--borders
 	circfill(rdr.x,rdr.y,rdr.r,0)
 	circ(rdr.x,rdr.y,rdr.r+1,6)
 	circ(rdr.x,rdr.y,rdr.r+2,7)
@@ -429,7 +510,7 @@ function surf_rdr_rndr()
 		line(rdr.x,rdr.y,rdr.x+ang.x,rdr.y+ang.y,3)
 		del(rdr_lines,ang)
 	end
- --middle peg
+--middle peg
 	pset(rdr.x,rdr.y,5)
 	
 	clr_blip()
@@ -474,7 +555,7 @@ function debug_msg()
 end
 
 function debug_vis()
- pset(plr.x,plr.y,8)
+pset(plr.x,plr.y,8)
 end
 
 -->8
