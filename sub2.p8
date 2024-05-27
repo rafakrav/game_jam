@@ -6,841 +6,850 @@ function _init()
 
 
 
---debug mouse--
-poke(0x5f2d, 1)
-mask = true
-
---turn of key hold repeat for btnp
-poke(0x5f5c, 255)
-
-
- game_state = "play"
-
-
-	surf_lvl = 41
-
-	plr_init()
-	surf_rdr_init()
-	npc_init()
-	trpd_init()
+	--debug mouse--
+	poke(0x5f2d, 1)
+	mask = true
 	
-	--bubble particles list
-	ptcl_bbl = {}
-	sonar_tbl ={}
+	--turn of key hold repeat for btnp
+	poke(0x5f5c, 255)
 	
-	--camera initialization
-	cam = {x = plr.x-64,
-								y = 0}				
 	
-	--enable inverted circfill
-	--add "| 0x1800" to the color
-	poke(0x5f34,0x2)
-
-							
-end
-----------------------------
-function _update()
-if game_state == "over" then
-    if(btnp(❎)) _init()
-end  
-
-if game_state == "play" then
-
----submerged
-    if plr.mode == "submerged" then
-					plr_sub_ctrl()
-
----npcs
-					shark_updt()
-					ship_updt()
-					trpd_updt()
+	 game_state = "play"
+	
+	
+		surf_lvl = 41
+	
+		plr_init()
+		surf_rdr_init()
+		npc_init()
+		trpd_init()
+		
+		--bubble particles list
+		ptcl_bbl = {}
+		sonar_tbl ={}
+		
+		--camera initialization
+		cam = {x = plr.x-64,
+									y = 0}				
+		
+		--enable inverted circfill
+		--add "| 0x1800" to the color
+		poke(0x5f34,0x2)
+	
+								
+	end
+	----------------------------
+	function _update()
+	if game_state == "over" then
+		if(btnp(❎)) _init()
+	end  
+	
+	if game_state == "play" then
+	
+	---submerged
+		if plr.mode == "submerged" then
+						plr_sub_ctrl()
+	
+	---npcs
+						shark_updt()
+						ship_updt()
+						trpd_updt()
+						
+		end
+	
+		if plr.mode == "surface" then
+						plr_surf_ctrl()
+						surf_rdr_updt()
 					
-    end
-
-    if plr.mode == "surface" then
-					plr_surf_ctrl()
-					surf_rdr_updt()
-				
-    end
-end
-
-
-  
-    
-----------------------------
-   
-end
-
-function _draw()
-
-if game_state == "play" then
-	if plr.mode == "submerged" then
-		cls(12)
-
-		plr_sub_rndr()		
-		shark_rndr()
-		ship_rndr()
-		trpd_rndr()
-  if (mask)	plr_sub_mask()
-	 rppl_rndr()
-		sonar_rndr()
-		if(btnp(🅾️) and time() > plr.snr_ts+plr.snr_cd) sonar(plr.x,plr.y)
-		if(btnp(❎)) mask=not mask
-
-		plr_coll()
-	end
-
-
-
-
-	if plr.mode == "surface" then
-	 cls()
-	 plr_surf_rndr()
-	 surf_rdr_rndr()
-	end
-end
-
-if game_state == "over" then
-	game_over_scrn()
-end
-
----debug
-
-
----debug
-
-
-
-spr(0,stat(32),stat(33))
-camera()
-print("mouse: "..stat(32).." "..stat(33),30,110,9)
-if (_tbl != nil) print(#trpd_tbl)
---print(#trpd_tbl,30,125,9)
-end
--->8
---character controller
-
-function plr_init()
-	plr = {x = 65,
-							y = 64,
-							flp = false,
-							sprt = 0,
-							spd_x = 0,
-							spd_y = 0,
-							surf_x = 0,
-							surf_y = 0,
-							acc_x = 0.035,
-							acc_y = 0.02,
-							decc_x = 0.06,
-							decc_y = 0.02,
-							max_spd_x = 2,
-							max_spd_y = 2,
-							mode = "submerged",
-							snr_cd = 2,
-							snr_ts = -1}
---surface
---submerged				
-end
-
-function surf_rdr_init()
-rdr={x=63,
-					y=100,
-					angl=1,
-     r=13}
-rdr_lines={}
-
-rdr_gap_tbl={{-4,10},
-             {-4,-10},
-             {4,-10},
-             {4,10},
-             {-10,4},
-             {-10,-4},
-             {10,-4},
-             {10,4}}
-end
-
-
--------submerged----------------
-
-function plr_coll()
-	local prb1 = {x=plr.x-7,
-																y=plr.y+2}
-	local prb2 = {x=plr.x+7,
-																y=plr.y+2}
- local prb3 = {x=plr.x,
-																y=plr.y+2}
-
-	local prb_tbl = {prb1,
-																		prb2,
-																		prb3
-																	}
-	local hit = false
-
-	for prb in all(prb_tbl) do
-	 col = fget(mget(
-							flr(prb.x/8),
-							flr((prb.y)/8),
-							8)) ==1
-	 --pset(prb.x,prb.y,8)
-		if(col) hit = true
-	end
-	if(hit) game_state = "over"
-end
-
------------------------
-
-
-function sonar(x,y)
- y =flr(y/8)
- x =flr((x-63)/8)
-	
-	local ts = time()
-	local delay = 0
-	local x_tbl ={}
-	local x_bag ={}
-
-	plr.snr_ts = time()
-
-
-	for k=x-5,x+20 do add (x_tbl,k) end
-	for l in all(x_tbl) do add(x_bag, l) end
- 
- 	for j = y,y+15 do
-	 delay+=0.1
---only way to clone table...
-	 	for i in all(x_bag) do
-				hit = fget(mget(i,j))==1
-				if (hit) then
-			 	add(sonar_tbl,{i=i,j=j,ts=ts+delay})
-			 	del(x_bag,i)
-					goto continue
-				end
-			::continue::
-			end
-		
 		end
-	sfx(0)
-end
-
-----------------------
-
-function plr_surf_ctrl()
-
- if(btn(➡️)) then
-		plr.surf_x+=1
-	elseif(btn(⬅️)) then
-		plr.surf_x-=1
- end
- 
- if btn(⬇️) then
-  plr.y = surf_lvl
-  --give it a buff when diving
-  plr.spd_y = plr.acc_y*2
-  plr.mode = "submerged"
- end
-
-end
-
----------------------
-
-function surf_rdr_updt()
-
-
-	rdr.angl+=0.01
-	
-	for a = rdr.angl,rdr.angl+0.1,0.001 do 
-	--for a = rdr.angl,rdr.angl+1,0.001 do 
-			x=rdr.r*cos(a)
-			y=rdr.r*sin(a)	
-			if(x<0) x+=1
-			if(y<0)	y+=1
-			add(rdr_lines,{x=x,y=y})
 	end
 	
-end
-
-
-
---------submerged------------
-
-function plr_sub_ctrl()
-
-	--calc accell horiz.
-	if(btn(➡️)) then
-		plr.spd_x+=plr.acc_x
-	elseif(btn(⬅️)) then
-		plr.spd_x-=plr.acc_x
-	elseif(not(btn(➡️)) and not(btn(⬅️)) and abs(plr.spd_x) >= min (plr.acc_x,plr.decc_x)) then
-		plr.spd_x-=plr.decc_x*sgn(plr.spd_x)
-	end
-	--calc accell vert.	
-	if(btn(⬆️)) then
-		plr.spd_y-=plr.acc_y
-	elseif(btn(⬇️)) then
-		plr.spd_y+=plr.acc_y
-	elseif(not(btn(⬆️)) and not(btn(⬇️)) and abs(plr.spd_y) >= min (plr.acc_y,plr.decc_y)) then
-		plr.spd_y-=plr.decc_y*sgn(plr.spd_y)
-	end
 	
-	--speed cap and handbrake hor.
-	if abs(plr.spd_x) > plr.max_spd_x then
-		plr.spd_x = plr.max_spd_x * sgn(plr.spd_x)
-	elseif abs(plr.spd_x) < plr.acc_x then
-		if(abs(plr.spd_x)>0) plr.x = plr.x
-		--apply handbrake
-		plr.spd_x = 0
-	end
-	--speed cap and handbrake vert.
-	if abs(plr.spd_y) > plr.max_spd_y then
-		plr.spd_y = plr.max_spd_y * sgn(plr.spd_y)
-	elseif abs(plr.spd_y) < plr.acc_y then
+	  
 		
-		if(abs(plr.spd_y)>0)	plr.y =plr.y
-		plr.spd_y = 0
-
+	----------------------------
+	   
 	end
 	
-	--apply values	
-	plr.x+=plr.spd_x
-	plr.y+=plr.spd_y
+	function _draw()
 	
-	if (plr.spd_x > 0) then
-		plr.flp = false
-	elseif (plr.spd_x < 0) then
-		plr.flp = true
+	if game_state == "play" then
+		if plr.mode == "submerged" then
+			cls(12)
+	
+			plr_sub_rndr()		
+			shark_rndr()
+			ship_rndr()
+			trpd_rndr()
+	  if (mask)	plr_sub_mask()
+		 rppl_rndr()
+			sonar_rndr()
+			if(btnp(🅾️) and time() > plr.snr_ts+plr.snr_cd) sonar(plr.x,plr.y)
+			if(btnp(❎)) mask=not mask
+	
+			plr_coll()
+		end
+	
+	
+	
+	
+		if plr.mode == "surface" then
+		 cls()
+		 plr_surf_rndr()
+		 surf_rdr_rndr()
+		end
 	end
 	
- if plr.y < surf_lvl  
- and plr.mode == "submerged" then
-  plr.mode = "surface"
-  --reset camera to render properly	
-		camera()
- end
+	if game_state == "over" then
+		game_over_scrn()
+	end
 	
-end
-
-
-
--->8
---character render
-
-function game_over_scrn()
-	cls()
+	---debug
+	
+	
+	---debug
+	
+	
+	
+	spr(0,stat(32),stat(33))
 	camera()
-	print("game over",48,58,2)
-	print("press ❎ to restart",28,68)
-end
-
-
-
-
---------submerged--------
-
-function sonar_rndr()
-
-	local snr_dur = 0.6
-	local clr = 11
-	for snr in all(sonar_tbl) do
-				if time() > snr.ts	then
-					line(snr.i*8,
-					snr.j*8,
-					snr.i*8+8,
-					snr.j*8,
-					clr)
-	   end
-
---				if(snr.ts+snr_dur/2<time()) clr = 3
-				if(snr.ts+snr_dur<time()) del(sonar_tbl,snr)
+	print("mouse: "..stat(32).." "..stat(33),30,110,9)
+	if (_tbl != nil) print(#trpd_tbl)
+	--print(#trpd_tbl,30,125,9)
+	end
+	-->8
+	--character controller
+	
+	function plr_init()
+		plr = {x = 65,
+								y = 64,
+								flp = false,
+								sprt = 0,
+								spd_x = 0,
+								spd_y = 0,
+								surf_x = 0,
+								surf_y = 0,
+								acc_x = 0.035,
+								acc_y = 0.02,
+								decc_x = 0.06,
+								decc_y = 0.02,
+								max_spd_x = 2,
+								max_spd_y = 2,
+								mode = "submerged",
+								snr_cd = 2,
+								snr_ts = -1}
+	--surface
+	--submerged				
 	end
 	
-end
-
--------------------------------
-
-function bbl_rndr(x,y,spd,flp)
-
-	local _x = flr(x)
-	local _y = flr(y)+2
-
-	if spd != 0 and #ptcl_bbl<=4 then
-
-	if (plr.flp == true)  _x+=10
-	if (plr.flp == false) _x-=8
+	function surf_rdr_init()
+	rdr={x=63,
+						y=100,
+						angl=1,
+		 r=13}
+	rdr_lines={}
 	
-
-	 add(ptcl_bbl,{x=_x,
-                y=_y,
-                ogx = _x,
-                ogy = _y})
- end 
- 
- for bbl in all(ptcl_bbl) do
-		prev_bbly = bbl.y
-	 bbl.y-=0.5
-	 if(flr(prev_bbly)>flr(bbl.y)) bbl.x+=rnd({-1,1})
-		 pset(bbl.x, bbl.y,7)
-	 if (bbl.y < bbl.ogy -5)	del(ptcl_bbl,bbl)
+	rdr_gap_tbl={{-4,10},
+				 {-4,-10},
+				 {4,-10},
+				 {4,10},
+				 {-10,4},
+				 {-10,-4},
+				 {10,-4},
+				 {10,4}}
 	end
-end
-
-
-------------------------------
-
-
-
-function plr_sub_rndr()
-
- cam.x = plr.x-64
---camera needs to move 1st
---to avoid stutter
- camera(cam.x,cam.y)
- map()
-bbl_rndr(plr.x,plr.y,plr.spd_x,plr.flp)
-
---	skybox
---put here rectfill?
-
---this is the horizon line
---prob shouldn't be here	
-	spr(1,plr.x-7,plr.y-3,2,1,plr.flp)
 	
-end
-
-
-function plr_sub_mask()
-		fillp(░)
-		circfill(plr.x,plr.y,14,1 | 0x1800)
-		fillp()
-		circfill(plr.x,plr.y,18,1 | 0x1800)
-end
-
---------surface----------------
-
-function plr_surf_rndr()
-
-local center = plr.surf_x+63
-local lck_clr = 2
-
-
---subm lvls will be line 1
---surf lvls will be line 2
- camera(plr.surf_x,0)
- map(0,16,0,4)
- spr(26,80,59,2,1)
-
-
---scope: prob after map
---and before ui
---
- 
-------ui pannels-------
- camera()
- circfill(63,63,14,5 | 0x1800)
- circ(63,63,14,6)
- circ(63,63,15,7)
- --top left
- line(0,0,52,52,6)
- line(1,0,53,52,7)
- --bottom right
- line(74,74,127,127,6)
- line(74,73,128,127,7)
-
---bottom left
- line(0,126,52,74,7)
- line(0,127,53,74,6)
---top right
- line(74,52,126,0,7)
- line(74,53,127,0,6)
-
-
-if (locked) lck_clr = 8
-	rect(89,57,117,67,6)
-	rect(90,58,116,66,lck_clr)
-	rectfill(91,59,115,65,0)
-	print("locked",92,60,lck_clr)
-
 	
-	--recticle
-	fillp(▒)
- line(53,63,73,63,11)
- line(63,53,63,73,11)	
- fillp()
-end
-
----------------------------
-
-function surf_rdr_rndr()
-
- --borders
-	circfill(rdr.x,rdr.y,rdr.r,0)
-	circ(rdr.x,rdr.y,rdr.r+1,6)
-	circ(rdr.x,rdr.y,rdr.r+2,7)
+	-------submerged----------------
 	
-	for ang in all(rdr_lines) do
-		line(rdr.x,rdr.y,rdr.x+ang.x,rdr.y+ang.y,3)
-		del(rdr_lines,ang)
-	end
- --middle peg
-	pset(rdr.x,rdr.y,5)
+	function plr_coll()
+		local prb1 = {x=plr.x-7,
+																	y=plr.y+2}
+		local prb2 = {x=plr.x+7,
+																	y=plr.y+2}
+	 local prb3 = {x=plr.x,
+																	y=plr.y+2}
 	
-	clr_blip()
---	if (pget(rdr.x+enemy.x,rdr.y+enemy.y))==3 then
---	enemy.ts = time()
---	pset(rdr.x+enemy.x,rdr.y+enemy.y,11)
---	elseif (enemy.blp_ts+0.8 > time()) then
---	pset(rdr.x+enemy.x,rdr.y+enemy.y,3)
---	end
+		local prb_tbl = {prb1,
+																			prb2,
+																			prb3
+																		}
+		local hit = false
 	
-end
-
-------------------------
-
-function clr_blip()
-	
-	for gap in all(rdr_gap_tbl) do
-	local x = gap[1]+rdr.x
-	local y = gap[2]+rdr.y
-		if pget(x - 1, y) == 3 and
-	    pget(x + 1, y) == 3 and
-	    pget(x, y - 1) == 3 and
-	    pget(x, y + 1) == 3 then
-	    pset(x,y,3)
-	    end
-	end
-end
--->8
---debug functions
-
-
-function debug_msg()
-
-	--empty print to set pos for all
-	print("",cam.x+4,cam.y+4,5)
-	--print("plr.mode: "..plr.mode,cam.x+4,cam.y+4,5)	
-	--print("plr.y: "..plr.y,5)	
-	print("plr.x: "..plr.x,5)	
-	print("plr.spd_x: "..plr.spd_x,5)	
-	print("plr.y: "..plr.y,5)		
-	print("plr.spd_y: "..plr.y,5)	
-end
-
-
-
--->8
---enemy functions
-
-function npc_init()
-
-ship = {x=95,
-								y=surf_lvl-6,
-								blp_ts=-1,
-								radi = 20,
-								ang =0.25,
-								arcs = 3,
-								arc_w = 0.1,
-								sonar_cd = 3,
-								sonar_ts = -1,
-								arcs_tbl={},
-								sprt=26,
-								fire_trpd = false,
-								trp_cd = 2,
-								trp_ts = -1,
-								ptrl_rng = 10,
-								ptrl_pos = 0,
-								ptrl_dir = -1,
-								flp = true}
-
-ship2 = {x=176,
-								y=surf_lvl-6,
-								blp_ts=-1,
-								radi = 24,
-								ang =0.25,
-								arcs = 5,
-								arc_w = 0.15,
-								sonar_cd = 2.5,
-								sonar_ts = -1,
-								arcs_tbl={},
-								sprt=26,
-								fire_trpd = false,
-								trp_cd = 2,
-								trp_ts = -1,
-								ptrl_rng = 14,
-								ptrl_pos = 0,
-								ptrl_dir = -1,
-								flp = true}
-
-ship3 = {x=304,
-								y=surf_lvl-6,
-								blp_ts=-1,
-								radi = 30,
-								ang =0.25,
-								arcs = 7,
-								arc_w = 0.20,
-								sonar_cd = 4.5,
-								sonar_ts = -1,
-								arcs_tbl={},
-								sprt=26,
-								fire_trpd = false,
-								trp_cd = 2,
-								trp_ts = -1,
-								ptrl_rng = 20,
-								ptrl_pos = 0,
-								ptrl_dir = -1,
-								flp = true}
-
-ship4 = {x=470,
-								y=surf_lvl-6,
-								blp_ts=-1,
-								radi = 48,
-								ang =0.25,
-								arcs = 7,
-								arc_w = 0.07,
-								sonar_cd = 2,
-								sonar_ts = -1,
-								arcs_tbl={},
-								sprt=26,
-								fire_trpd = false,
-								trp_cd = 2,
-								trp_ts = -1,
-								ptrl_rng = 30,
-								ptrl_pos = 0,
-								ptrl_dir = -1,
-								flp = true}
-
-ship5 = {x=730,
-								y=surf_lvl-6,
-								blp_ts=-1,
-								radi = 56,
-								ang =0.25,
-								arcs = 7,
-								arc_w = 0.07,
-								sonar_cd = 2,
-								sonar_ts = -1,
-								arcs_tbl={},
-								sprt=26,
-								fire_trpd = false,
-								trp_cd = 2,
-								trp_ts = -1,
-								ptrl_rng = 10,
-								ptrl_pos = 0,
-								ptrl_dir = -1,
-								flp = true}								
-
-									
-ship_tbl={ship,ship2,ship3,ship4,ship5}
-									
-									
-shark	= {x=120,
-									y=63,
-									sprt={10,12,14},
-									sprt_pos = 1,
-									dir=1}
-
-shark2	= {x=448,
-									y=80,
-									sprt={10,12,14},
-									sprt_pos = 1,
-									dir=1}
-									
-shark3	= {x=600,
-									y=60,
-									sprt={10,12,14},
-									sprt_pos = 1,
-									dir=1}
-									
-shark4	= {x=800,
-									y=40,
-									sprt={10,12,14},
-									sprt_pos = 1,
-									dir=1}
-																		
-
-shark_tbl = {shark,
-													shark2,
-													shark3,
-													shark4}
-									
-end
-
-
-function shark_updt()
-
- for shk in all(shark_tbl) do
-	 shk.x-=0.2
-	 if(shk.sprt_pos>3.9) shk.dir*=-1
-	 if(shk.sprt_pos<=1) shk.dir*=-1
--- 	shk.sprt_pos+=0.1*shk.dir
- 	shk.sprt_pos = mid(1, shk.sprt_pos + 0.1 * shk.dir, 4)
- end
- 
-end
-
-
-
-function shark_rndr()
-
- for shk in all(shark_tbl) do
-	 spr(shk.sprt[flr(shk.sprt_pos)],shk.x,shk.y,2,1)
- end
- 
-end
-
-------------ship------
-
-function ship_updt()
-	for ship in all(ship_tbl) do 
-		ship.x-=0.2*ship.ptrl_dir
-		ship.ptrl_pos -=0.2*ship.ptrl_dir
-		if(abs(ship.ptrl_pos)>=ship.ptrl_rng) then
-			ship.ptrl_dir*=-1
-			ship.flp = not ship.flp
-		end	
-		if(time() > ship.sonar_ts + ship.sonar_cd) then
-			ship.ang = ship.arc_w+rnd()*(0.5-ship.arc_w*2)
-			rppl_updt(ship)
-			ship.sonar_ts = time()
+		for prb in all(prb_tbl) do
+		 col = fget(mget(
+								flr(prb.x/8),
+								flr((prb.y)/8),
+								8)) ==1
+		 --pset(prb.x,prb.y,8)
+			if(col) hit = true
 		end
+		if(hit) game_state = "over"
 	end
-end
-
-
-function ship_rndr()
-	for ship in all(ship_tbl) do 
-		spr(ship.sprt,ship.x,ship.y,2,1,ship.flp)
-		if(ship.fire_trpd) then
-
---here
-		trpd = {x=ship.x+8,
-									y=ship.y,
-									last_x = 0,
-									last_y = 0,
-									spd = 0.8,
-									lock = true,
-									range = 12,
-									ts_unlock = -1,
-									unlock_dur=2}
-
-		 add(trpd_tbl,trpd)
-		 ship.fire_trpd = false
-		end
+	
+	-----------------------
+	
+	
+	function sonar(x,y)
+	 y =flr(y/8)
+	 x =flr((x-63)/8)
 		
+		local ts = time()
+		local delay = 0
+		local x_tbl ={}
+		local x_bag ={}
 	
-	end
-end
-
-------------ripple----
-
-function rppl_updt(ship)
-
-	local	r=0
-	local r_step = ship.radi/ship.arcs
-
-	for i=1,ship.arcs do 
-		ang_1 = ship.ang - ship.arc_w
-		ang_2 = ship.ang + ship.arc_w
-		add(ship.arcs_tbl,{r=r,
- 											ang_1=ang_1,
-	 										ang_2=ang_2,
-		 									clr=11,
-			 								ts=time()})
-		r+=r_step										
-	end
-end
-		
-function rppl_rndr()
+		plr.snr_ts = time()
 	
-	for ship in all(ship_tbl) do
-		
-		local rpl_x = ship.x+8
-		local rpl_y = ship.y+8
-		local rdr_x = 0
-		local rdr_y = 0
-
---reset detection
-		ship.fire_trpd = false
-			
 	
-	 if #ship.arcs_tbl >0 then
-			for arc in all(ship.arcs_tbl) do
-				for arc_ang = arc.ang_1,arc.ang_2,0.005 do
-				
-					rdr_x = rpl_x+arc.r*cos(arc_ang)
-					rdr_y = rpl_y-arc.r*sin(arc_ang)
-					pset(rdr_x,rdr_y,arc.clr)
-
-					if (rdr_x>plr.x) and (rdr_x<plr.x+15) 
-					and(rdr_y>plr.y) and (rdr_y<plr.y+7) then
-
-					 if	ship.fire_trpd == false 
-						and time() > ship.trp_ts + ship.trp_cd then
-							ship.fire_trpd = true
-	
-	--here2
-							ship.trp_ts = time()
-							print("detected") 																
-					 end
-					end									
-																					
+		for k=x-5,x+20 do add (x_tbl,k) end
+		for l in all(x_tbl) do add(x_bag, l) end
+	 
+		 for j = y,y+15 do
+		 delay+=0.1
+	--only way to clone table...
+			 for i in all(x_bag) do
+					hit = fget(mget(i,j))==1
+					if (hit) then
+					 add(sonar_tbl,{i=i,j=j,ts=ts+delay})
+					 del(x_bag,i)
+						goto continue
+					end
+				::continue::
 				end
-				arc.r+=0.5
-				if(arc.r > ship.radi/2)	arc.clr = 3
-				if(arc.r > ship.radi)	del(ship.arcs_tbl,arc)	
+			
+			end
+		sfx(0)
+	end
+	
+	----------------------
+	
+	function plr_surf_ctrl()
+	
+	 if(btn(➡️)) then
+			plr.surf_x+=1
+		elseif(btn(⬅️)) then
+			plr.surf_x-=1
+	 end
+	 
+	 if btn(⬇️) then
+	  plr.y = surf_lvl
+	  --give it a buff when diving
+	  plr.spd_y = plr.acc_y*2
+	  plr.mode = "submerged"
+	 end
+	
+	end
+	
+	---------------------
+	
+	function surf_rdr_updt()
+	
+	
+		rdr.angl+=0.01
+		
+		for a = rdr.angl,rdr.angl+0.1,0.001 do 
+		--for a = rdr.angl,rdr.angl+1,0.001 do 
+				x=rdr.r*cos(a)
+				y=rdr.r*sin(a)	
+				if(x<0) x+=1
+				if(y<0)	y+=1
+				add(rdr_lines,{x=x,y=y})
+		end
+		
+	end
+	
+	
+	
+	--------submerged------------
+	
+	function plr_sub_ctrl()
+	
+		--calc accell horiz.
+		if(btn(➡️)) then
+			plr.spd_x+=plr.acc_x
+		elseif(btn(⬅️)) then
+			plr.spd_x-=plr.acc_x
+		elseif(not(btn(➡️)) and not(btn(⬅️)) and abs(plr.spd_x) >= min (plr.acc_x,plr.decc_x)) then
+			plr.spd_x-=plr.decc_x*sgn(plr.spd_x)
+		end
+		--calc accell vert.	
+		if(btn(⬆️)) then
+			plr.spd_y-=plr.acc_y
+		elseif(btn(⬇️)) then
+			plr.spd_y+=plr.acc_y
+		elseif(not(btn(⬆️)) and not(btn(⬇️)) and abs(plr.spd_y) >= min (plr.acc_y,plr.decc_y)) then
+			plr.spd_y-=plr.decc_y*sgn(plr.spd_y)
+		end
+		
+		--speed cap and handbrake hor.
+		if abs(plr.spd_x) > plr.max_spd_x then
+			plr.spd_x = plr.max_spd_x * sgn(plr.spd_x)
+		elseif abs(plr.spd_x) < plr.acc_x then
+			if(abs(plr.spd_x)>0) plr.x = plr.x
+			--apply handbrake
+			plr.spd_x = 0
+		end
+		--speed cap and handbrake vert.
+		if abs(plr.spd_y) > plr.max_spd_y then
+			plr.spd_y = plr.max_spd_y * sgn(plr.spd_y)
+		elseif abs(plr.spd_y) < plr.acc_y then
+			
+			if(abs(plr.spd_y)>0)	plr.y =plr.y
+			plr.spd_y = 0
+	
+		end
+		
+		--apply values	
+		plr.x+=plr.spd_x
+		plr.y+=plr.spd_y
+		
+		if (plr.spd_x > 0) then
+			plr.flp = false
+		elseif (plr.spd_x < 0) then
+			plr.flp = true
+		end
+		
+	 if plr.y < surf_lvl  
+	 and plr.mode == "submerged" then
+	  plr.mode = "surface"
+	  --reset camera to render properly	
+			camera()
+	 end
+		
+	end
+	
+	
+	
+	-->8
+	--character render
+	
+	function game_over_scrn()
+		cls()
+		camera()
+		print("game over",48,58,2)
+		print("press ❎ to restart",28,68)
+	end
+	
+	
+	
+	
+	--------submerged--------
+	
+	function sonar_rndr()
+	
+		local snr_dur = 0.6
+		local clr = 11
+		for snr in all(sonar_tbl) do
+					if time() > snr.ts	then
+						line(snr.i*8,
+						snr.j*8,
+						snr.i*8+8,
+						snr.j*8,
+						clr)
+		   end
+	
+	--				if(snr.ts+snr_dur/2<time()) clr = 3
+					if(snr.ts+snr_dur<time()) del(sonar_tbl,snr)
+		end
+		
+	end
+	
+	-------------------------------
+	
+	function bbl_rndr(x,y,spd,flp)
+	
+		local _x = flr(x)
+		local _y = flr(y)+2
+	
+		if spd != 0 and #ptcl_bbl<=4 then
+	
+		if (plr.flp == true)  _x+=10
+		if (plr.flp == false) _x-=8
+		
+	
+		 add(ptcl_bbl,{x=_x,
+					y=_y,
+					ogx = _x,
+					ogy = _y})
+	 end 
+	 
+	 for bbl in all(ptcl_bbl) do
+			prev_bbly = bbl.y
+		 bbl.y-=0.5
+		 if(flr(prev_bbly)>flr(bbl.y)) bbl.x+=rnd({-1,1})
+			 pset(bbl.x, bbl.y,7)
+		 if (bbl.y < bbl.ogy -5)	del(ptcl_bbl,bbl)
+		end
+	end
+	
+	
+	------------------------------
+	
+	
+	
+	function plr_sub_rndr()
+	
+	 cam.x = plr.x-64
+	--camera needs to move 1st
+	--to avoid stutter
+	 camera(cam.x,cam.y)
+	 map()
+	bbl_rndr(plr.x,plr.y,plr.spd_x,plr.flp)
+	
+	--	skybox
+	--put here rectfill?
+	
+	--this is the horizon line
+	--prob shouldn't be here	
+		spr(1,plr.x-7,plr.y-3,2,1,plr.flp)
+		
+	end
+	
+	
+	function plr_sub_mask()
+			fillp(░)
+			circfill(plr.x,plr.y,14,1 | 0x1800)
+			fillp()
+			circfill(plr.x,plr.y,18,1 | 0x1800)
+	end
+	
+	--------surface----------------
+	
+	function plr_surf_rndr()
+	
+	local center = plr.surf_x+63
+	local lck_clr = 2
+	
+	
+	--subm lvls will be line 1
+	--surf lvls will be line 2
+	 camera(plr.surf_x,0)
+	 map(0,16,0,4)
+	 spr(26,80,59,2,1)
+	
+	
+	--scope: prob after map
+	--and before ui
+	--
+	 
+	------ui pannels-------
+	 camera()
+	 circfill(63,63,14,5 | 0x1800)
+	 circ(63,63,14,6)
+	 circ(63,63,15,7)
+	 --top left
+	 line(0,0,52,52,6)
+	 line(1,0,53,52,7)
+	 --bottom right
+	 line(74,74,127,127,6)
+	 line(74,73,128,127,7)
+	
+	--bottom left
+	 line(0,126,52,74,7)
+	 line(0,127,53,74,6)
+	--top right
+	 line(74,52,126,0,7)
+	 line(74,53,127,0,6)
+	
+	
+	if (locked) lck_clr = 8
+		rect(89,57,117,67,6)
+		rect(90,58,116,66,lck_clr)
+		rectfill(91,59,115,65,0)
+		print("locked",92,60,lck_clr)
+	
+		
+		--recticle
+		fillp(▒)
+	 line(53,63,73,63,11)
+	 line(63,53,63,73,11)	
+	 fillp()
+	end
+	
+	---------------------------
+	
+	function surf_rdr_rndr()
+	
+	 --borders
+		circfill(rdr.x,rdr.y,rdr.r,0)
+		circ(rdr.x,rdr.y,rdr.r+1,6)
+		circ(rdr.x,rdr.y,rdr.r+2,7)
+		
+		for ang in all(rdr_lines) do
+			line(rdr.x,rdr.y,rdr.x+ang.x,rdr.y+ang.y,3)
+			del(rdr_lines,ang)
+		end
+	 --middle peg
+		pset(rdr.x,rdr.y,5)
+		
+		clr_blip()
+	--	if (pget(rdr.x+enemy.x,rdr.y+enemy.y))==3 then
+	--	enemy.ts = time()
+	--	pset(rdr.x+enemy.x,rdr.y+enemy.y,11)
+	--	elseif (enemy.blp_ts+0.8 > time()) then
+	--	pset(rdr.x+enemy.x,rdr.y+enemy.y,3)
+	--	end
+		
+	end
+	
+	------------------------
+	
+	function clr_blip()
+		
+		for gap in all(rdr_gap_tbl) do
+		local x = gap[1]+rdr.x
+		local y = gap[2]+rdr.y
+			if pget(x - 1, y) == 3 and
+			pget(x + 1, y) == 3 and
+			pget(x, y - 1) == 3 and
+			pget(x, y + 1) == 3 then
+			pset(x,y,3)
+			end
+		end
+	end
+	-->8
+	--debug functions
+	
+	
+	function debug_msg()
+	
+		--empty print to set pos for all
+		print("",cam.x+4,cam.y+4,5)
+		--print("plr.mode: "..plr.mode,cam.x+4,cam.y+4,5)	
+		--print("plr.y: "..plr.y,5)	
+		print("plr.x: "..plr.x,5)	
+		print("plr.spd_x: "..plr.spd_x,5)	
+		print("plr.y: "..plr.y,5)		
+		print("plr.spd_y: "..plr.y,5)	
+	end
+	
+	
+	
+	-->8
+	--enemy functions
+	
+	function npc_init()
+	
+	ship = {x=95,
+									y=surf_lvl-6,
+									blp_ts=-1,
+									radi = 20,
+									ang =0.25,
+									arcs = 3,
+									arc_w = 0.1,
+									sonar_cd = 3,
+									sonar_ts = -1,
+									arcs_tbl={},
+									sprt=26,
+									fire_trpd = false,
+									trp_cd = 2,
+									trp_ts = -1,
+									ptrl_rng = 10,
+									ptrl_pos = 0,
+									ptrl_dir = -1,
+									flp = true}
+	
+	ship2 = {x=176,
+									y=surf_lvl-6,
+									blp_ts=-1,
+									radi = 24,
+									ang =0.25,
+									arcs = 5,
+									arc_w = 0.15,
+									sonar_cd = 2.5,
+									sonar_ts = -1,
+									arcs_tbl={},
+									sprt=26,
+									fire_trpd = false,
+									trp_cd = 2,
+									trp_ts = -1,
+									ptrl_rng = 14,
+									ptrl_pos = 0,
+									ptrl_dir = -1,
+									flp = true}
+	
+	ship3 = {x=304,
+									y=surf_lvl-6,
+									blp_ts=-1,
+									radi = 30,
+									ang =0.25,
+									arcs = 7,
+									arc_w = 0.20,
+									sonar_cd = 4.5,
+									sonar_ts = -1,
+									arcs_tbl={},
+									sprt=26,
+									fire_trpd = false,
+									trp_cd = 2,
+									trp_ts = -1,
+									ptrl_rng = 20,
+									ptrl_pos = 0,
+									ptrl_dir = -1,
+									flp = true}
+	
+	ship4 = {x=470,
+									y=surf_lvl-6,
+									blp_ts=-1,
+									radi = 48,
+									ang =0.25,
+									arcs = 7,
+									arc_w = 0.07,
+									sonar_cd = 2,
+									sonar_ts = -1,
+									arcs_tbl={},
+									sprt=26,
+									fire_trpd = false,
+									trp_cd = 2,
+									trp_ts = -1,
+									ptrl_rng = 30,
+									ptrl_pos = 0,
+									ptrl_dir = -1,
+									flp = true}
+	
+	ship5 = {x=730,
+									y=surf_lvl-6,
+									blp_ts=-1,
+									radi = 56,
+									ang =0.25,
+									arcs = 7,
+									arc_w = 0.07,
+									sonar_cd = 2,
+									sonar_ts = -1,
+									arcs_tbl={},
+									sprt=26,
+									fire_trpd = false,
+									trp_cd = 2,
+									trp_ts = -1,
+									ptrl_rng = 10,
+									ptrl_pos = 0,
+									ptrl_dir = -1,
+									flp = true}								
+	
+										
+	ship_tbl={ship,ship2,ship3,ship4,ship5}
+										
+										
+	shark	= {x=120,
+										y=63,
+										sprt={10,12,14},
+										sprt_pos = 1,
+										dir=1}
+	
+	shark2	= {x=448,
+										y=80,
+										sprt={10,12,14},
+										sprt_pos = 1,
+										dir=1}
+										
+	shark3	= {x=600,
+										y=60,
+										sprt={10,12,14},
+										sprt_pos = 1,
+										dir=1}
+										
+	shark4	= {x=800,
+										y=40,
+										sprt={10,12,14},
+										sprt_pos = 1,
+										dir=1}
+																			
+	
+	shark_tbl = {shark,
+														shark2,
+														shark3,
+														shark4}
+										
+	end
+	
+	
+	function shark_updt()
+	
+	 for shk in all(shark_tbl) do
+		 shk.x-=0.2
+		 if(shk.sprt_pos>3.9) shk.dir*=-1
+		 if(shk.sprt_pos<=1) shk.dir*=-1
+	-- 	shk.sprt_pos+=0.1*shk.dir
+		 shk.sprt_pos = mid(1, shk.sprt_pos + 0.1 * shk.dir, 4)
+	 end
+	 
+	end
+	
+	
+	
+	function shark_rndr()
+	
+	 for shk in all(shark_tbl) do
+		 spr(shk.sprt[flr(shk.sprt_pos)],shk.x,shk.y,2,1)
+	 end
+	 
+	end
+	
+	------------ship------
+	
+	function ship_updt()
+		for ship in all(ship_tbl) do 
+			ship.x-=0.2*ship.ptrl_dir
+			ship.ptrl_pos -=0.2*ship.ptrl_dir
+			if(abs(ship.ptrl_pos)>=ship.ptrl_rng) then
+				ship.ptrl_dir*=-1
+				ship.flp = not ship.flp
 			end	
-		end	
+			if(time() > ship.sonar_ts + ship.sonar_cd) then
+				ship.ang = ship.arc_w+rnd()*(0.5-ship.arc_w*2)
+				rppl_updt(ship)
+				ship.sonar_ts = time()
+			end
+		end
 	end
 	
-end
-
------------torpedo---
-
-function trpd_init()
-trpd_tbl = {}								
-end		
-
-function trpd_rndr()
-
-	for trpd in all(trpd_tbl) do
-		spr(41,trpd.x,trpd.y)
-	end						
 	
-end
-
-function trpd_updt()
+	function ship_rndr()
+		for ship in all(ship_tbl) do 
+			spr(ship.sprt,ship.x,ship.y,2,1,ship.flp)
+			if(ship.fire_trpd) then
 	
-	for trpd in all(trpd_tbl) do
+	--here
+			trpd = {x=ship.x+8,
+										y=ship.y,
+										last_x = 0,
+										last_y = 0,
+										spd = 0.8,
+										lock = true,
+										range = 12,
+										ts_unlock = -1,
+										unlock_dur=2}
+	
+			 add(trpd_tbl,trpd)
+			 ship.fire_trpd = false
+			end
+			
 		
-	local dist_x = plr.x - trpd.x
-	local dist_y = plr.y - trpd.y
-	dist = sqrt(dist_x^2+dist_y^2)
-	
-	dist_x = dist_x / dist
-	dist_y = dist_y / dist
-	
-	
-	if dist >trpd.range and trpd.lock==true then
-		trpd.x = trpd.x + dist_x * trpd.spd
-		trpd.y = trpd.y + dist_y * trpd.spd
-
-
-	elseif dist <= trpd.range and trpd.lock==true then
-		trpd.last_x_dir = dist_x
-		trpd.last_y_dir = dist_y
-		trpd.last_plr_x = plr.x
-		trpd.last_plr_y = plr.y
-		trpd.lock = false
-		trpd.ts_unlock = time()
+		end
 	end
-
-	if trpd.lock==false then
-		trpd.x = trpd.x + trpd.last_x_dir * trpd.spd
-		trpd.y = trpd.y + trpd.last_y_dir * trpd.spd
-		if(trpd.ts_unlock+trpd.unlock_dur < time()) then
-		 del(trpd_tbl,trpd)
-		end	
+	
+	------------ripple----
+	
+	function rppl_updt(ship)
+	
+		local	r=0
+		local r_step = ship.radi/ship.arcs
+	
+		for i=1,ship.arcs do 
+			ang_1 = ship.ang - ship.arc_w
+			ang_2 = ship.ang + ship.arc_w
+			add(ship.arcs_tbl,{r=r,
+												 ang_1=ang_1,
+												 ang_2=ang_2,
+												 clr=11,
+												 ts=time()})
+			r+=r_step										
+		end
 	end
+			
+	function rppl_rndr()
+		
+		for ship in all(ship_tbl) do
+			
+			local rpl_x = ship.x+8
+			local rpl_y = ship.y+8
+			local rdr_x = 0
+			local rdr_y = 0
+	
+	--reset detection
+			ship.fire_trpd = false
+				
+		
+		 if #ship.arcs_tbl >0 then
+				for arc in all(ship.arcs_tbl) do
+					for arc_ang = arc.ang_1,arc.ang_2,0.005 do
+					
+						rdr_x = rpl_x+arc.r*cos(arc_ang)
+						rdr_y = rpl_y-arc.r*sin(arc_ang)
+						pset(rdr_x,rdr_y,arc.clr)
+	
+						if (rdr_x>plr.x) and (rdr_x<plr.x+15) 
+						and(rdr_y>plr.y) and (rdr_y<plr.y+7) then
+	
+						 if	ship.fire_trpd == false 
+							and time() > ship.trp_ts + ship.trp_cd then
+								ship.fire_trpd = true
+		
+		--here2
+								ship.trp_ts = time()
+								print("detected") 																
+						 end
+						end									
+																						
+					end
+					arc.r+=0.5
+					if(arc.r > ship.radi/2)	arc.clr = 3
+					if(arc.r > ship.radi)	del(ship.arcs_tbl,arc)	
+				end	
+			end	
+		end
 		
 	end
-end
+	
+	-----------torpedo---
+	
+	function trpd_init()
+	trpd_tbl = {}								
+	end		
+	
+	function trpd_rndr()
+		for trpd in all(trpd_tbl) do
+			-- Draw the torpedo sprite
+			local x = trpd.x
+			local y = trpd.y
+			local flip_x = trpd.mirror
+			local flip_y = false  -- No need to flip vertically
+			
+			spr(trpd.sprite_id, x, y, 1, 1, flip_x, flip_y)
+		end
+	end
+	
+	
+	function trpd_updt()
+		for trpd in all(trpd_tbl) do
+			local dist_x = plr.x - trpd.x
+			local dist_y = plr.y - trpd.y
+			local dist = sqrt(dist_x ^ 2 + dist_y ^ 2)
+			
+			-- Check collision with player
+			if dist < 1 then
+				game_state = "over"
+			end
+	
+			-- Calculate the angle between the torpedo and the player
+			local angle = atan2(dist_y, dist_x)
+			-- Normalize the distance components to make the torpedo move towards the player
+			local dist_x_normalized = dist_x / dist
+			local dist_y_normalized = dist_y / dist
+			-- Move the torpedo towards the player
+			trpd.x = trpd.x + dist_x_normalized * trpd.spd
+			trpd.y = trpd.y + dist_y_normalized * trpd.spd
+	
+			-- Update the sprite direction based on the direction of movement
+			if dist_x_normalized > 0.5 then
+				-- Horizontal direction pointing right
+				trpd.sprite_id = 43
+				trpd.mirror = false
+			elseif dist_x_normalized < -0.5 then
+				-- Horizontal direction pointing left
+				trpd.sprite_id = 43
+				trpd.mirror = true
+			elseif dist_y_normalized > 0 then
+				-- Vertical direction pointing down
+				trpd.sprite_id = 41
+				trpd.mirror = false
+			else
+				-- Vertical direction pointing up
+				trpd.sprite_id = 41
+				trpd.mirror = true
+			end
+		end
+	end
 
 -->8
 --ideas
