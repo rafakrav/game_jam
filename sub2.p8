@@ -2,798 +2,919 @@ pico-8 cartridge // http://www.pico-8.com
 version 42
 __lua__
 function _init()
+win = false
+entering_surf = true
+spr_snr_tbl ={}
+surf_enemy_tbl = {}
+
+--debug mouse--
+poke(0x5f2d, 1)
+mask = true
+
+--turn of key hold repeat for btnp
+poke(0x5f5c, 255)
+
+
+ game_state = "play"
+
+
+	surf_lvl = 41
+
+	plr_init()
+	surf_rdr_init()
+	npc_init()
+	trpd_init()
+	
+	--bubble particles list
+	ptcl_bbl = {}
+	sonar_tbl ={}
+	
+	--camera initialization
+	cam = {x = plr.x-64,
+								y = 0}				
+	
+	--enable inverted circfill
+	--add "| 0x1800" to the color
+	poke(0x5f34,0x2)
+
+							
+end
+----------------------------
+function _update()
+if game_state == "over" or game_state == "ended" then
+    if(btnp(❎)) _init()
+end  
 
 
 
 
-	--debug mouse--
-	poke(0x5f2d, 1)
-	mask = true
-	
-	--turn of key hold repeat for btnp
-	poke(0x5f5c, 255)
-	
-	
-	 game_state = "play"
-	
-	
-		surf_lvl = 41
-	
-		plr_init()
-		surf_rdr_init()
-		npc_init()
-		trpd_init()
-		
-		--bubble particles list
-		ptcl_bbl = {}
-		sonar_tbl ={}
-		
-		--camera initialization
-		cam = {x = plr.x-64,
-									y = 0}				
-		
-		--enable inverted circfill
-		--add "| 0x1800" to the color
-		poke(0x5f34,0x2)
-	
-								
-	end
-	----------------------------
-	function _update()
-	if game_state == "over" then
-		if(btnp(❎)) _init()
-	end  
-	
-	if game_state == "play" then
-	
-	---submerged
-		if plr.mode == "submerged" then
-						plr_sub_ctrl()
-	
-	---npcs
-						shark_updt()
-						ship_updt()
-						trpd_updt()
-						
-		end
-	
-		if plr.mode == "surface" then
-						plr_surf_ctrl()
-						surf_rdr_updt()
+
+if game_state == "play" then
+
+---submerged
+    if plr.mode == "submerged" then
+					plr_sub_ctrl()
+
+---npcs
+					shark_updt()
+					ship_updt()
+					trpd_updt()
 					
-		end
-	end
-	
-	
-	  
-		
-	----------------------------
-	   
-	end
-	
-	function _draw()
-	
-	if game_state == "play" then
-		if plr.mode == "submerged" then
-			cls(12)
-	
-			plr_sub_rndr()		
-			shark_rndr()
-			ship_rndr()
-			trpd_rndr()
-	  if (mask)	plr_sub_mask()
-		 rppl_rndr()
-			sonar_rndr()
-			if(btnp(🅾️) and time() > plr.snr_ts+plr.snr_cd) sonar(plr.x,plr.y)
-			if(btnp(❎)) mask=not mask
-	
-			plr_coll()
-		end
-	
-	
-	
-	
-		if plr.mode == "surface" then
-		 cls()
-		 plr_surf_rndr()
-		 surf_rdr_rndr()
-		end
-	end
-	
-	if game_state == "over" then
-		game_over_scrn()
-	end
-	
-	---debug
-	
-	
-	---debug
-	
-	
-	
-	spr(0,stat(32),stat(33))
-	camera()
-	print("mouse: "..stat(32).." "..stat(33),30,110,9)
-	if (_tbl != nil) print(#trpd_tbl)
-	--print(#trpd_tbl,30,125,9)
-	end
-	-->8
-	--character controller
-	
-	function plr_init()
-		plr = {x = 65,
-								y = 64,
-								flp = false,
-								sprt = 0,
-								spd_x = 0,
-								spd_y = 0,
-								surf_x = 0,
-								surf_y = 0,
-								acc_x = 0.035,
-								acc_y = 0.02,
-								decc_x = 0.06,
-								decc_y = 0.02,
-								max_spd_x = 2,
-								max_spd_y = 2,
-								mode = "submerged",
-								snr_cd = 2,
-								snr_ts = -1}
-	--surface
-	--submerged				
-	end
-	
-	function surf_rdr_init()
-	rdr={x=63,
-						y=100,
-						angl=1,
-		 r=13}
-	rdr_lines={}
-	
-	rdr_gap_tbl={{-4,10},
-				 {-4,-10},
-				 {4,-10},
-				 {4,10},
-				 {-10,4},
-				 {-10,-4},
-				 {10,-4},
-				 {10,4}}
-	end
-	
-	
-	-------submerged----------------
-	
-	function plr_coll()
-		local prb1 = {x=plr.x-7,
-																	y=plr.y+2}
-		local prb2 = {x=plr.x+7,
-																	y=plr.y+2}
-	 local prb3 = {x=plr.x,
-																	y=plr.y+2}
-	
-		local prb_tbl = {prb1,
-																			prb2,
-																			prb3
-																		}
-		local hit = false
-	
-		for prb in all(prb_tbl) do
-		 col = fget(mget(
-								flr(prb.x/8),
-								flr((prb.y)/8),
-								8)) ==1
-		 --pset(prb.x,prb.y,8)
-			if(col) hit = true
-		end
-		if(hit) game_state = "over"
-	end
-	
-	-----------------------
-	
-	
-	function sonar(x,y)
-	 y =flr(y/8)
-	 x =flr((x-63)/8)
-		
-		local ts = time()
-		local delay = 0
-		local x_tbl ={}
-		local x_bag ={}
-	
-		plr.snr_ts = time()
-	
-	
-		for k=x-5,x+20 do add (x_tbl,k) end
-		for l in all(x_tbl) do add(x_bag, l) end
-	 
-		 for j = y,y+15 do
-		 delay+=0.1
-	--only way to clone table...
-			 for i in all(x_bag) do
-					hit = fget(mget(i,j))==1
-					if (hit) then
-					 add(sonar_tbl,{i=i,j=j,ts=ts+delay})
-					 del(x_bag,i)
-						goto continue
-					end
-				::continue::
-				end
-			
-			end
-		sfx(0)
-	end
-	
-	----------------------
-	
-	function plr_surf_ctrl()
-	
-	 if(btn(➡️)) then
-			plr.surf_x+=1
-		elseif(btn(⬅️)) then
-			plr.surf_x-=1
-	 end
-	 
-	 if btn(⬇️) then
-	  plr.y = surf_lvl
-	  --give it a buff when diving
-	  plr.spd_y = plr.acc_y*2
-	  plr.mode = "submerged"
-	 end
-	
-	end
-	
-	---------------------
-	
-	function surf_rdr_updt()
-	
-	
-		rdr.angl+=0.01
-		
-		for a = rdr.angl,rdr.angl+0.1,0.001 do 
-		--for a = rdr.angl,rdr.angl+1,0.001 do 
-				x=rdr.r*cos(a)
-				y=rdr.r*sin(a)	
-				if(x<0) x+=1
-				if(y<0)	y+=1
-				add(rdr_lines,{x=x,y=y})
-		end
-		
-	end
-	
-	
-	
-	--------submerged------------
-	
-	function plr_sub_ctrl()
-	
-		--calc accell horiz.
-		if(btn(➡️)) then
-			plr.spd_x+=plr.acc_x
-		elseif(btn(⬅️)) then
-			plr.spd_x-=plr.acc_x
-		elseif(not(btn(➡️)) and not(btn(⬅️)) and abs(plr.spd_x) >= min (plr.acc_x,plr.decc_x)) then
-			plr.spd_x-=plr.decc_x*sgn(plr.spd_x)
-		end
-		--calc accell vert.	
-		if(btn(⬆️)) then
-			plr.spd_y-=plr.acc_y
-		elseif(btn(⬇️)) then
-			plr.spd_y+=plr.acc_y
-		elseif(not(btn(⬆️)) and not(btn(⬇️)) and abs(plr.spd_y) >= min (plr.acc_y,plr.decc_y)) then
-			plr.spd_y-=plr.decc_y*sgn(plr.spd_y)
-		end
-		
-		--speed cap and handbrake hor.
-		if abs(plr.spd_x) > plr.max_spd_x then
-			plr.spd_x = plr.max_spd_x * sgn(plr.spd_x)
-		elseif abs(plr.spd_x) < plr.acc_x then
-			if(abs(plr.spd_x)>0) plr.x = plr.x
-			--apply handbrake
-			plr.spd_x = 0
-		end
-		--speed cap and handbrake vert.
-		if abs(plr.spd_y) > plr.max_spd_y then
-			plr.spd_y = plr.max_spd_y * sgn(plr.spd_y)
-		elseif abs(plr.spd_y) < plr.acc_y then
-			
-			if(abs(plr.spd_y)>0)	plr.y =plr.y
-			plr.spd_y = 0
-	
-		end
-		
-		--apply values	
-		plr.x+=plr.spd_x
-		plr.y+=plr.spd_y
-		
-		if (plr.spd_x > 0) then
-			plr.flp = false
-		elseif (plr.spd_x < 0) then
-			plr.flp = true
-		end
-		
-	 if plr.y < surf_lvl  
-	 and plr.mode == "submerged" then
-	  plr.mode = "surface"
-	  --reset camera to render properly	
-			camera()
-	 end
-		
-	end
-	
-	
-	
-	-->8
-	--character render
-	
-	function game_over_scrn()
-		cls()
-		camera()
-		print("game over",48,58,2)
-		print("press ❎ to restart",28,68)
-	end
-	
-	
-	
-	
-	--------submerged--------
-	
-	function sonar_rndr()
-	
-		local snr_dur = 0.6
-		local clr = 11
-		for snr in all(sonar_tbl) do
-					if time() > snr.ts	then
-						line(snr.i*8,
-						snr.j*8,
-						snr.i*8+8,
-						snr.j*8,
-						clr)
-		   end
-	
-	--				if(snr.ts+snr_dur/2<time()) clr = 3
-					if(snr.ts+snr_dur<time()) del(sonar_tbl,snr)
-		end
-		
-	end
-	
-	-------------------------------
-	
-	function bbl_rndr(x,y,spd,flp)
-	
-		local _x = flr(x)
-		local _y = flr(y)+2
-	
-		if spd != 0 and #ptcl_bbl<=4 then
-	
-		if (plr.flp == true)  _x+=10
-		if (plr.flp == false) _x-=8
-		
-	
-		 add(ptcl_bbl,{x=_x,
-					y=_y,
-					ogx = _x,
-					ogy = _y})
-	 end 
-	 
-	 for bbl in all(ptcl_bbl) do
-			prev_bbly = bbl.y
-		 bbl.y-=0.5
-		 if(flr(prev_bbly)>flr(bbl.y)) bbl.x+=rnd({-1,1})
-			 pset(bbl.x, bbl.y,7)
-		 if (bbl.y < bbl.ogy -5)	del(ptcl_bbl,bbl)
-		end
-	end
-	
-	
-	------------------------------
-	
-	
-	
-	function plr_sub_rndr()
-	
-	 cam.x = plr.x-64
-	--camera needs to move 1st
-	--to avoid stutter
-	 camera(cam.x,cam.y)
-	 map()
-	bbl_rndr(plr.x,plr.y,plr.spd_x,plr.flp)
-	
-	--	skybox
-	--put here rectfill?
-	
-	--this is the horizon line
-	--prob shouldn't be here	
-		spr(1,plr.x-7,plr.y-3,2,1,plr.flp)
-		
-	end
-	
-	
-	function plr_sub_mask()
-			fillp(░)
-			circfill(plr.x,plr.y,14,1 | 0x1800)
-			fillp()
-			circfill(plr.x,plr.y,18,1 | 0x1800)
-	end
-	
-	--------surface----------------
-	
-	function plr_surf_rndr()
-	
-	local center = plr.surf_x+63
-	local lck_clr = 2
-	
-	
-	--subm lvls will be line 1
-	--surf lvls will be line 2
-	 camera(plr.surf_x,0)
-	 map(0,16,0,4)
-	 spr(26,80,59,2,1)
-	
-	
-	--scope: prob after map
-	--and before ui
-	--
-	 
-	------ui pannels-------
-	 camera()
-	 circfill(63,63,14,5 | 0x1800)
-	 circ(63,63,14,6)
-	 circ(63,63,15,7)
-	 --top left
-	 line(0,0,52,52,6)
-	 line(1,0,53,52,7)
-	 --bottom right
-	 line(74,74,127,127,6)
-	 line(74,73,128,127,7)
-	
-	--bottom left
-	 line(0,126,52,74,7)
-	 line(0,127,53,74,6)
-	--top right
-	 line(74,52,126,0,7)
-	 line(74,53,127,0,6)
-	
-	
-	if (locked) lck_clr = 8
-		rect(89,57,117,67,6)
-		rect(90,58,116,66,lck_clr)
-		rectfill(91,59,115,65,0)
-		print("locked",92,60,lck_clr)
-	
-		
-		--recticle
-		fillp(▒)
-	 line(53,63,73,63,11)
-	 line(63,53,63,73,11)	
-	 fillp()
-	end
-	
-	---------------------------
-	
-	function surf_rdr_rndr()
-	
-	 --borders
-		circfill(rdr.x,rdr.y,rdr.r,0)
-		circ(rdr.x,rdr.y,rdr.r+1,6)
-		circ(rdr.x,rdr.y,rdr.r+2,7)
-		
-		for ang in all(rdr_lines) do
-			line(rdr.x,rdr.y,rdr.x+ang.x,rdr.y+ang.y,3)
-			del(rdr_lines,ang)
-		end
-	 --middle peg
-		pset(rdr.x,rdr.y,5)
-		
-		clr_blip()
-	--	if (pget(rdr.x+enemy.x,rdr.y+enemy.y))==3 then
-	--	enemy.ts = time()
-	--	pset(rdr.x+enemy.x,rdr.y+enemy.y,11)
-	--	elseif (enemy.blp_ts+0.8 > time()) then
-	--	pset(rdr.x+enemy.x,rdr.y+enemy.y,3)
-	--	end
-		
-	end
-	
-	------------------------
-	
-	function clr_blip()
-		
-		for gap in all(rdr_gap_tbl) do
-		local x = gap[1]+rdr.x
-		local y = gap[2]+rdr.y
-			if pget(x - 1, y) == 3 and
-			pget(x + 1, y) == 3 and
-			pget(x, y - 1) == 3 and
-			pget(x, y + 1) == 3 then
-			pset(x,y,3)
-			end
-		end
-	end
-	-->8
-	--debug functions
-	
-	
-	function debug_msg()
-	
-		--empty print to set pos for all
-		print("",cam.x+4,cam.y+4,5)
-		--print("plr.mode: "..plr.mode,cam.x+4,cam.y+4,5)	
-		--print("plr.y: "..plr.y,5)	
-		print("plr.x: "..plr.x,5)	
-		print("plr.spd_x: "..plr.spd_x,5)	
-		print("plr.y: "..plr.y,5)		
-		print("plr.spd_y: "..plr.y,5)	
-	end
-	
-	
-	
-	-->8
-	--enemy functions
-	
-	function npc_init()
-	
-	ship = {x=95,
-									y=surf_lvl-6,
-									blp_ts=-1,
-									radi = 20,
-									ang =0.25,
-									arcs = 3,
-									arc_w = 0.1,
-									sonar_cd = 3,
-									sonar_ts = -1,
-									arcs_tbl={},
-									sprt=26,
-									fire_trpd = false,
-									trp_cd = 2,
-									trp_ts = -1,
-									ptrl_rng = 10,
-									ptrl_pos = 0,
-									ptrl_dir = -1,
-									flp = true}
-	
-	ship2 = {x=176,
-									y=surf_lvl-6,
-									blp_ts=-1,
-									radi = 24,
-									ang =0.25,
-									arcs = 5,
-									arc_w = 0.15,
-									sonar_cd = 2.5,
-									sonar_ts = -1,
-									arcs_tbl={},
-									sprt=26,
-									fire_trpd = false,
-									trp_cd = 2,
-									trp_ts = -1,
-									ptrl_rng = 14,
-									ptrl_pos = 0,
-									ptrl_dir = -1,
-									flp = true}
-	
-	ship3 = {x=304,
-									y=surf_lvl-6,
-									blp_ts=-1,
-									radi = 30,
-									ang =0.25,
-									arcs = 7,
-									arc_w = 0.20,
-									sonar_cd = 4.5,
-									sonar_ts = -1,
-									arcs_tbl={},
-									sprt=26,
-									fire_trpd = false,
-									trp_cd = 2,
-									trp_ts = -1,
-									ptrl_rng = 20,
-									ptrl_pos = 0,
-									ptrl_dir = -1,
-									flp = true}
-	
-	ship4 = {x=470,
-									y=surf_lvl-6,
-									blp_ts=-1,
-									radi = 48,
-									ang =0.25,
-									arcs = 7,
-									arc_w = 0.07,
-									sonar_cd = 2,
-									sonar_ts = -1,
-									arcs_tbl={},
-									sprt=26,
-									fire_trpd = false,
-									trp_cd = 2,
-									trp_ts = -1,
-									ptrl_rng = 30,
-									ptrl_pos = 0,
-									ptrl_dir = -1,
-									flp = true}
-	
-	ship5 = {x=730,
-									y=surf_lvl-6,
-									blp_ts=-1,
-									radi = 56,
-									ang =0.25,
-									arcs = 7,
-									arc_w = 0.07,
-									sonar_cd = 2,
-									sonar_ts = -1,
-									arcs_tbl={},
-									sprt=26,
-									fire_trpd = false,
-									trp_cd = 2,
-									trp_ts = -1,
-									ptrl_rng = 10,
-									ptrl_pos = 0,
-									ptrl_dir = -1,
-									flp = true}								
-	
-										
-	ship_tbl={ship,ship2,ship3,ship4,ship5}
-										
-										
-	shark	= {x=120,
-										y=63,
-										sprt={10,12,14},
-										sprt_pos = 1,
-										dir=1}
-	
-	shark2	= {x=448,
-										y=80,
-										sprt={10,12,14},
-										sprt_pos = 1,
-										dir=1}
-										
-	shark3	= {x=600,
-										y=60,
-										sprt={10,12,14},
-										sprt_pos = 1,
-										dir=1}
-										
-	shark4	= {x=800,
-										y=40,
-										sprt={10,12,14},
-										sprt_pos = 1,
-										dir=1}
-																			
-	
-	shark_tbl = {shark,
-														shark2,
-														shark3,
-														shark4}
-										
-	end
-	
-	
-	function shark_updt()
-	
-	 for shk in all(shark_tbl) do
-		 shk.x-=0.2
-		 if(shk.sprt_pos>3.9) shk.dir*=-1
-		 if(shk.sprt_pos<=1) shk.dir*=-1
-	-- 	shk.sprt_pos+=0.1*shk.dir
-		 shk.sprt_pos = mid(1, shk.sprt_pos + 0.1 * shk.dir, 4)
-	 end
-	 
-	end
-	
-	
-	
-	function shark_rndr()
-	
-	 for shk in all(shark_tbl) do
-		 spr(shk.sprt[flr(shk.sprt_pos)],shk.x,shk.y,2,1)
-	 end
-	 
-	end
-	
-	------------ship------
-	
-	function ship_updt()
-		for ship in all(ship_tbl) do 
-			ship.x-=0.2*ship.ptrl_dir
-			ship.ptrl_pos -=0.2*ship.ptrl_dir
-			if(abs(ship.ptrl_pos)>=ship.ptrl_rng) then
-				ship.ptrl_dir*=-1
-				ship.flp = not ship.flp
-			end	
-			if(time() > ship.sonar_ts + ship.sonar_cd) then
-				ship.ang = ship.arc_w+rnd()*(0.5-ship.arc_w*2)
-				rppl_updt(ship)
-				ship.sonar_ts = time()
-			end
-		end
-	end
-	
-	
-	function ship_rndr()
-		for ship in all(ship_tbl) do 
-			spr(ship.sprt,ship.x,ship.y,2,1,ship.flp)
-			if(ship.fire_trpd) then
-	
-	--here
-			trpd = {x=ship.x+8,
-										y=ship.y,
-										last_x = 0,
-										last_y = 0,
-										spd = 0.8,
-										lock = true,
-										range = 12,
-										ts_unlock = -1,
-										unlock_dur=2}
-	
-			 add(trpd_tbl,trpd)
-			 ship.fire_trpd = false
-			end
-			
-		
-		end
-	end
-	
-	------------ripple----
-	
-	function rppl_updt(ship)
-	
-		local	r=0
-		local r_step = ship.radi/ship.arcs
-	
-		for i=1,ship.arcs do 
-			ang_1 = ship.ang - ship.arc_w
-			ang_2 = ship.ang + ship.arc_w
-			add(ship.arcs_tbl,{r=r,
-												 ang_1=ang_1,
-												 ang_2=ang_2,
-												 clr=11,
-												 ts=time()})
-			r+=r_step										
-		end
-	end
-			
-	function rppl_rndr()
-		
-		for ship in all(ship_tbl) do
-			
-			local rpl_x = ship.x+8
-			local rpl_y = ship.y+8
-			local rdr_x = 0
-			local rdr_y = 0
-	
-	--reset detection
-			ship.fire_trpd = false
+    end
+
+    if plr.mode == "surface" then
+					plr_surf_ctrl()
+					surf_rdr_updt()
 				
+    end
+end
+
+
+  
+    
+----------------------------
+   
+end
+
+function _draw()
+
+if game_state == "play" then
+	if plr.mode == "submerged" then
+		cls(12)
+
+		plr_sub_rndr()		
+		shark_rndr()
+		ship_rndr()
+		trpd_rndr()
+  if (mask)	plr_sub_mask()
+	 rppl_rndr()
+		sonar_rndr()
+		if(btnp(🅾️) and time() > plr.snr_ts+plr.snr_cd) sonar(plr.x,plr.y)
+		if(btnp(❎)) mask=not mask
+
+		plr_coll()
+	end
+
+
+
+
+	if plr.mode == "surface" then
+	 cls()
+	 plr_surf_rndr()
+	 surf_rdr_rndr()
+	end
+end
+
+if game_state == "over" then
+	game_over_scrn()
+end
+
+if game_state == "ended" then
+	game_won_scrn()
+end
+
+---debug
+
+
+---debug
+
+
+
+--spr(0,stat(32),stat(33))
+--line(plr.x-50,40,plr.x+50,40,8)
+--camera()
+--print("mouse: "..stat(32).." "..stat(33),30,110,9)
+--print(game_state)
+--print("enmy tbl size: " ..#surf_enemy_tbl,0,0,8)
+end
+-->8
+--character controller
+
+function plr_init()
+	plr = {
+	x = 63,
+--x = 850,
+							y = 64,
+							flp = false,
+							sprt = 0,
+							spd_x = 0,
+							spd_y = 0,
+							surf_x = 0,
+							surf_y = 0,
+							acc_x = 0.035,
+							acc_y = 0.02,
+							decc_x = 0.06,
+							decc_y = 0.02,
+							max_spd_x = 2,
+							max_spd_y = 2,
+							mode = "submerged",
+							snr_cd = 2,
+							snr_ts = -1}
+--surface
+--submerged				
+end
+
+function surf_rdr_init()
+rdr={x=63,
+					y=100,
+					angl=1,
+     r=13}
+rdr_lines={}
+
+rdr_gap_tbl={{-4,10},
+             {-4,-10},
+             {4,-10},
+             {4,10},
+             {-10,4},
+             {-10,-4},
+             {10,-4},
+             {10,4}}
+end
+
+
+-------submerged----------------
+
+function plr_coll()
+	local prb1 = {x=plr.x-7,
+																y=plr.y+2}
+	local prb2 = {x=plr.x+7,
+																y=plr.y+2}
+ local prb3 = {x=plr.x,
+																y=plr.y+2}
+
+	local prb_tbl = {prb1,
+																		prb2,
+																		prb3
+																	}
+	local hit = false
+
+	for prb in all(prb_tbl) do
+	 
+	 flg = fget(mget(
+							flr(prb.x/8),
+							flr((prb.y)/8),
+							8)) 
+							
 		
-		 if #ship.arcs_tbl >0 then
-				for arc in all(ship.arcs_tbl) do
-					for arc_ang = arc.ang_1,arc.ang_2,0.005 do
-					
-						rdr_x = rpl_x+arc.r*cos(arc_ang)
-						rdr_y = rpl_y-arc.r*sin(arc_ang)
-						pset(rdr_x,rdr_y,arc.clr)
+	 --pset(prb.x,prb.y,8)
+		if(flg == 1) hit = true
+  if(plr.x>1005) win = true
+	end
+	if(hit) game_state  = "over"
+	if(win) game_state = "ended"
+end
+
+-----------------------
+
+
+function sonar(x,y)
+ y =flr(y/8)
+ x =flr((x-63)/8)
 	
-						if (rdr_x>plr.x) and (rdr_x<plr.x+15) 
-						and(rdr_y>plr.y) and (rdr_y<plr.y+7) then
-	
-						 if	ship.fire_trpd == false 
-							and time() > ship.trp_ts + ship.trp_cd then
-								ship.fire_trpd = true
+	local ts = time()
+	local delay = 0
+	local x_tbl ={}
+	local x_bag ={}
+
+	plr.snr_ts = time()
+
+
+	for k=x-5,x+20 do add (x_tbl,k) end
+	for l in all(x_tbl) do add(x_bag, l) end
+ 
+ 	for j = y,y+15 do
+	 delay+=0.1
+--only way to clone table...
+	 	for i in all(x_bag) do
+				hit = fget(mget(i,j))==1
+				if (hit) then
+			 	add(sonar_tbl,{i=i,j=j,ts=ts+delay})
+			 	del(x_bag,i)
+					goto continue
+				end
+			::continue::
+			end
 		
-		--here2
-								ship.trp_ts = time()
-								print("detected") 																
-						 end
-						end									
-																						
-					end
-					arc.r+=0.5
-					if(arc.r > ship.radi/2)	arc.clr = 3
-					if(arc.r > ship.radi)	del(ship.arcs_tbl,arc)	
-				end	
-			end	
 		end
 		
+		--create a new render table for flag 3
+	--copy sharks in screen
+	for shk in all(shark_tbl) do
+			if shk.x > plr.x-80 and
+						shk.x < plr.x+80 then
+						add(spr_snr_tbl,{x = shk.x,
+																							y = shk.y,
+																							sprt = 28,
+																							ts = time()})
+			end	
+	end
+	--copy ships in screen
+		for ship in all(ship_tbl) do
+			if ship.x > plr.x-80 and
+						ship.x < plr.x+80 then
+						add(spr_snr_tbl,{x = ship.x,
+																							y = ship.y,
+																							sprt = ship.sprt,
+																							ts = time()})
+			end	
+	end
+
+		
+		
+	sfx(0)
+end
+
+----------------------
+
+function plr_surf_ctrl()
+
+if entering_surf then
+	init_surf_enemy()
+	entering_surf = false
+end
+ if(btn(➡️)) then
+		plr.surf_x+=1
+	elseif(btn(⬅️)) then
+		plr.surf_x-=1
+ end
+ 
+ if (plr.surf_x<-49) plr.surf_x = 217
+ if (plr.surf_x>217) plr.surf_x = -49
+  
+ if btn(⬇️) then
+  plr.y = surf_lvl+2
+  --give it a buff when diving
+  plr.spd_y = plr.acc_y*2
+  entering_surf = true
+  plr.mode = "submerged"
+ end
+
+end
+
+---------------------
+
+function init_surf_enemy()
+ for shp in all(ship_tbl) do
+ 	if shp.x <plr.x+50 and
+    	shp.x >plr.x-50 then
+ 				shp.surf_angl = rnd(1)
+ 				add(surf_enemy_tbl,shp)
+ 	end
+ end
+end
+
+
+
+
+function surf_rdr_updt()
+
+
+	rdr.angl+=0.01
+	
+	for a = rdr.angl,rdr.angl+0.1,0.001 do 
+	--for a = rdr.angl,rdr.angl+1,0.001 do 
+			x=rdr.r*cos(a)
+			y=rdr.r*sin(a)	
+			if(x<0) x+=1
+			if(y<0)	y+=1
+			add(rdr_lines,{x=x,y=y})
 	end
 	
-	-----------torpedo---
+end
+
+
+
+--------submerged------------
+
+function plr_sub_ctrl()
+
+	--calc accell horiz.
+	if(btn(➡️)) then
+		plr.spd_x+=plr.acc_x
+	elseif(btn(⬅️)) then
+		plr.spd_x-=plr.acc_x
+	elseif(not(btn(➡️)) and not(btn(⬅️)) and abs(plr.spd_x) >= min (plr.acc_x,plr.decc_x)) then
+		plr.spd_x-=plr.decc_x*sgn(plr.spd_x)
+	end
+	--calc accell vert.	
+	if(btn(⬆️)) then
+		plr.spd_y-=plr.acc_y
+	elseif(btn(⬇️)) then
+		plr.spd_y+=plr.acc_y
+	elseif(not(btn(⬆️)) and not(btn(⬇️)) and abs(plr.spd_y) >= min (plr.acc_y,plr.decc_y)) then
+		plr.spd_y-=plr.decc_y*sgn(plr.spd_y)
+	end
 	
-	function trpd_init()
+	--speed cap and handbrake hor.
+	if abs(plr.spd_x) > plr.max_spd_x then
+		plr.spd_x = plr.max_spd_x * sgn(plr.spd_x)
+	elseif abs(plr.spd_x) < plr.acc_x then
+		if(abs(plr.spd_x)>0) plr.x = plr.x
+		--apply handbrake
+		plr.spd_x = 0
+	end
+	--speed cap and handbrake vert.
+	if abs(plr.spd_y) > plr.max_spd_y then
+		plr.spd_y = plr.max_spd_y * sgn(plr.spd_y)
+	elseif abs(plr.spd_y) < plr.acc_y then
+		
+		if(abs(plr.spd_y)>0)	plr.y =plr.y
+		plr.spd_y = 0
+
+	end
+	
+	--apply values	
+	plr.x+=plr.spd_x
+	plr.y+=plr.spd_y
+	
+	if (plr.spd_x > 0) then
+		plr.flp = false
+	elseif (plr.spd_x < 0) then
+		plr.flp = true
+	end
+	
+-- if plr.y < surf_lvl+2  
+-- and plr.mode == "submerged" then
+--  plr.mode = "surface"
+  --reset camera to render properly	
+--		camera()
+-- end
+	
+end
+
+
+
+-->8
+--character render
+
+function game_over_scrn()
+	cls()
+	camera()
+	print("game over",48,58,2)
+	print("press ❎ to restart",28,68)
+end
+
+function game_won_scrn()
+	cls()
+	camera()
+	print("game won!!",48,58,9)
+	print("press ❎ to restart",28,68)
+end
+
+
+
+--------submerged--------
+
+function sonar_rndr()
+
+	local snr_dur = 0.6
+	local clr = 11
+	for snr in all(sonar_tbl) do
+				if time() > snr.ts	then
+					line(snr.i*8,
+					snr.j*8,
+					snr.i*8+8,
+					snr.j*8,
+					clr)
+	   end
+
+--				if(snr.ts+snr_dur/2<time()) clr = 3
+				if(snr.ts+snr_dur<time()) del(sonar_tbl,snr)
+	end
+	
+	
+--render	stuff
+--set all colors to green
+ for i = 0, 15 do
+  pal(i, 11) -- set color i to green (color 11)
+ end
+
+	for sprt in all(spr_snr_tbl) do 
+		spr(sprt.sprt,sprt.x,sprt.y,2,1)
+		if sprt.ts + snr_dur < time() then
+			del(spr_snr_tbl,sprt)
+		end
+	end	
+
+	pal()
+	
+end
+
+-------------------------------
+
+function bbl_rndr(x,y,spd,flp)
+
+	local _x = flr(x)
+	local _y = flr(y)+2
+
+	if spd != 0 and #ptcl_bbl<=4 then
+
+	if (plr.flp == true)  _x+=10
+	if (plr.flp == false) _x-=8
+	
+
+	 add(ptcl_bbl,{x=_x,
+                y=_y,
+                ogx = _x,
+                ogy = _y})
+ end 
+ 
+ for bbl in all(ptcl_bbl) do
+		prev_bbly = bbl.y
+	 bbl.y-=0.5
+	 if(flr(prev_bbly)>flr(bbl.y)) bbl.x+=rnd({-1,1})
+		 pset(bbl.x, bbl.y,7)
+	 if (bbl.y < bbl.ogy -5)	del(ptcl_bbl,bbl)
+	end
+end
+
+
+------------------------------
+
+
+
+function plr_sub_rndr()
+
+ cam.x = plr.x-64
+--camera needs to move 1st
+--to avoid stutter
+ camera(cam.x,cam.y)
+ map()
+bbl_rndr(plr.x,plr.y,plr.spd_x,plr.flp)
+
+--	skybox
+--put here rectfill?
+
+--this is the horizon line
+--prob shouldn't be here	
+	spr(1,plr.x-7,plr.y-3,2,1,plr.flp)
+	
+end
+
+
+function plr_sub_mask()
+		fillp(░)
+		circfill(plr.x,plr.y,14,1 | 0x1800)
+		fillp()
+		circfill(plr.x,plr.y,18,1 | 0x1800)
+end
+
+--------surface----------------
+
+function plr_surf_mask()
+		fillp(░)
+		circfill(plr.x,plr.y,14,1 | 0x1800)
+		fillp()
+		circfill(plr.x,plr.y,18,1 | 0x1800)
+end
+
+
+
+function plr_surf_rndr()
+
+--local center = plr.surf_x+130
+local lck_clr = 2
+
+
+--subm lvls will be line 1
+--surf lvls will be line 2
+ camera(plr.surf_x,0)
+ map(0,16,0,4)
+
+ for enemy in all(surf_enemy_tbl) do
+		print("working")
+	 spr(26,enemy.surf_angl*180,59,2,1)
+-- 	print(enemy.surf_angl)
+ end
+ 
+
+
+--scope: prob after map
+--and before ui
+--
+ 
+------ui pannels-------
+ camera()
+ circfill(63,63,14,5 | 0x1800)
+ circ(63,63,14,6)
+ circ(63,63,15,7)
+ --top left
+ line(0,0,52,52,6)
+ line(1,0,53,52,7)
+ --bottom right
+ line(74,74,127,127,6)
+ line(74,73,128,127,7)
+
+--bottom left
+ line(0,126,52,74,7)
+ line(0,127,53,74,6)
+--top right
+ line(74,52,126,0,7)
+ line(74,53,127,0,6)
+
+
+if (locked) lck_clr = 8
+	rect(89,57,117,67,6)
+	rect(90,58,116,66,lck_clr)
+	rectfill(91,59,115,65,0)
+	print("locked",92,60,lck_clr)
+
+	
+	--recticle
+	fillp(▒)
+ line(53,63,73,63,11)
+ line(63,53,63,73,11)	
+ fillp()
+ 
+ print(plr.surf_x)
+end
+
+---------------------------
+
+function surf_rdr_rndr()
+
+ --borders
+	circfill(rdr.x,rdr.y,rdr.r,0)
+	circ(rdr.x,rdr.y,rdr.r+1,6)
+	circ(rdr.x,rdr.y,rdr.r+2,7)
+	
+	for ang in all(rdr_lines) do
+		line(rdr.x,rdr.y,rdr.x+ang.x,rdr.y+ang.y,3)
+		del(rdr_lines,ang)
+	end
+ --middle peg
+	pset(rdr.x,rdr.y,5)
+	
+	clr_blip()
+	
+ for enemy in all(surf_enemy_tbl) do
+		
+		local enemy_x = 6*cos(enemy.surf_angl)
+		local enemy_y = 6*sin(enemy.surf_angl)
+
+		if (pget(rdr.x+enemy_x,rdr.y+enemy_y))==3 then
+ 	enemy.blip_ts = time()
+ 	pset(rdr.x+enemy.x,rdr.y+enemy.y,11)
+ 	elseif (enemy.blip_ts+0.8 > time()) then
+ 	pset(rdr.x+enemy.x,rdr.y+enemy.y,3)
+	 end
+
+ end
+
+	
+end
+
+------------------------
+
+function clr_blip()
+	
+	for gap in all(rdr_gap_tbl) do
+	local x = gap[1]+rdr.x
+	local y = gap[2]+rdr.y
+		if pget(x - 1, y) == 3 and
+	    pget(x + 1, y) == 3 and
+	    pget(x, y - 1) == 3 and
+	    pget(x, y + 1) == 3 then
+	    pset(x,y,3)
+	    end
+	end
+end
+-->8
+--debug functions
+
+
+function debug_msg()
+
+	--empty print to set pos for all
+	print("",cam.x+4,cam.y+4,5)
+	--print("plr.mode: "..plr.mode,cam.x+4,cam.y+4,5)	
+	--print("plr.y: "..plr.y,5)	
+	print("plr.x: "..plr.x,5)	
+	print("plr.spd_x: "..plr.spd_x,5)	
+	print("plr.y: "..plr.y,5)		
+	print("plr.spd_y: "..plr.y,5)	
+end
+
+
+
+-->8
+--enemy functions
+
+function npc_init()
+
+ship = {x=95,
+								y=surf_lvl-6,
+								blp_ts=-1,
+								radi = 20,
+								ang =0.25,
+								arcs = 3,
+								arc_w = 0.1,
+								sonar_cd = 3,
+								sonar_ts = -1,
+								arcs_tbl={},
+								sprt=26,
+								fire_trpd = false,
+								trp_cd = 2,
+								trp_ts = -1,
+								ptrl_rng = 10,
+								ptrl_pos = 0,
+								ptrl_dir = -1,
+								flp = true,
+								surf_angl = 0,
+								blip_ts = -1}
+
+ship2 = {x=176,
+								y=surf_lvl-6,
+								blp_ts=-1,
+								radi = 24,
+								ang =0.25,
+								arcs = 5,
+								arc_w = 0.15,
+								sonar_cd = 2.5,
+								sonar_ts = -1,
+								arcs_tbl={},
+								sprt=26,
+								fire_trpd = false,
+								trp_cd = 2,
+								trp_ts = -1,
+								ptrl_rng = 14,
+								ptrl_pos = 0,
+								ptrl_dir = -1,
+								flp = true,
+								surf_angl = 0,
+								blip_ts = -1}
+
+ship3 = {x=304,
+								y=surf_lvl-6,
+								blp_ts=-1,
+								radi = 30,
+								ang =0.25,
+								arcs = 7,
+								arc_w = 0.20,
+								sonar_cd = 4.5,
+								sonar_ts = -1,
+								arcs_tbl={},
+								sprt=26,
+								fire_trpd = false,
+								trp_cd = 2,
+								trp_ts = -1,
+								ptrl_rng = 20,
+								ptrl_pos = 0,
+								ptrl_dir = -1,
+								flp = true,
+								surf_angl = 0,
+								blip_ts = -1}
+
+ship4 = {x=470,
+								y=surf_lvl-6,
+								blp_ts=-1,
+								radi = 48,
+								ang =0.25,
+								arcs = 7,
+								arc_w = 0.07,
+								sonar_cd = 2,
+								sonar_ts = -1,
+								arcs_tbl={},
+								sprt=26,
+								fire_trpd = false,
+								trp_cd = 2,
+								trp_ts = -1,
+								ptrl_rng = 30,
+								ptrl_pos = 0,
+								ptrl_dir = -1,
+								flp = true,
+								surf_angl = 0,
+								blip_ts = -1}
+
+ship5 = {x=730,
+								y=surf_lvl-6,
+								blp_ts=-1,
+								radi = 56,
+								ang =0.25,
+								arcs = 7,
+								arc_w = 0.07,
+								sonar_cd = 2,
+								sonar_ts = -1,
+								arcs_tbl={},
+								sprt=26,
+								fire_trpd = false,
+								trp_cd = 2,
+								trp_ts = -1,
+								ptrl_rng = 10,
+								ptrl_pos = 0,
+								ptrl_dir = -1,
+								flp = true,
+								surf_angl = 0,
+								blip_ts = -1}
+
+									
+ship_tbl={ship,ship2,ship3,ship4,ship5}
+									
+									
+shark	= {x=160,
+									y=63,
+									sprt={10,12,14},
+									sprt_pos = 1,
+									dir=1}
+
+shark2	= {x=448,
+									y=80,
+									sprt={10,12,14},
+									sprt_pos = 1,
+									dir=1}
+									
+shark3	= {x=600,
+									y=60,
+									sprt={10,12,14},
+									sprt_pos = 1,
+									dir=1}
+									
+shark4	= {x=800,
+									y=40,
+									sprt={10,12,14},
+									sprt_pos = 1,
+									dir=1}
+																		
+
+shark_tbl = {shark,
+													shark2,
+													shark3,
+													shark4}
+									
+end
+
+
+function shark_updt()
+
+ for shk in all(shark_tbl) do
+	 shk.x-=0.2
+	 if(shk.sprt_pos>3.9) shk.dir*=-1
+	 if(shk.sprt_pos<=1) shk.dir*=-1
+-- 	shk.sprt_pos+=0.1*shk.dir
+ 	shk.sprt_pos = mid(1, shk.sprt_pos + 0.1 * shk.dir, 4)
+ end
+ 
+end
+
+
+
+function shark_rndr()
+
+ for shk in all(shark_tbl) do
+	 spr(shk.sprt[flr(shk.sprt_pos)],shk.x,shk.y,2,1)
+ end
+ 
+end
+
+------------ship------
+
+function ship_updt()
+	for ship in all(ship_tbl) do 
+		ship.x-=0.2*ship.ptrl_dir
+		ship.ptrl_pos -=0.2*ship.ptrl_dir
+		if(abs(ship.ptrl_pos)>=ship.ptrl_rng) then
+			ship.ptrl_dir*=-1
+			ship.flp = not ship.flp
+		end	
+		if(time() > ship.sonar_ts + ship.sonar_cd) then
+			ship.ang = ship.arc_w+rnd()*(0.5-ship.arc_w*2)
+			rppl_updt(ship)
+			ship.sonar_ts = time()
+		end
+	end
+end
+
+
+function ship_rndr()
+	for ship in all(ship_tbl) do 
+		spr(ship.sprt,ship.x,ship.y,2,1,ship.flp)
+		if(ship.fire_trpd) then
+
+--here
+		trpd = {x=ship.x+8,
+									y=ship.y,
+									last_x = 0,
+									last_y = 0,
+									spd = 0.8,
+									lock = true,
+									range = 12,
+									ts_unlock = -1,
+									unlock_dur=2}
+
+		 add(trpd_tbl,trpd)
+		 ship.fire_trpd = false
+		end
+		
+	
+	end
+end
+
+------------ripple----
+
+function rppl_updt(ship)
+
+	local	r=0
+	local r_step = ship.radi/ship.arcs
+
+	for i=1,ship.arcs do 
+		ang_1 = ship.ang - ship.arc_w
+		ang_2 = ship.ang + ship.arc_w
+		add(ship.arcs_tbl,{r=r,
+ 											ang_1=ang_1,
+	 										ang_2=ang_2,
+		 									clr=11,
+			 								ts=time()})
+		r+=r_step										
+	end
+end
+		
+function rppl_rndr()
+	
+	for ship in all(ship_tbl) do
+		
+		local rpl_x = ship.x+8
+		local rpl_y = ship.y+8
+		local rdr_x = 0
+		local rdr_y = 0
+
+--reset detection
+		ship.fire_trpd = false
+			
+	
+	 if #ship.arcs_tbl >0 then
+			for arc in all(ship.arcs_tbl) do
+				for arc_ang = arc.ang_1,arc.ang_2,0.005 do
+				
+					rdr_x = rpl_x+arc.r*cos(arc_ang)
+					rdr_y = rpl_y-arc.r*sin(arc_ang)
+					pset(rdr_x,rdr_y,arc.clr)
+
+					if (rdr_x>plr.x) and (rdr_x<plr.x+15) 
+					and(rdr_y>plr.y) and (rdr_y<plr.y+7) then
+
+					 if	ship.fire_trpd == false 
+						and time() > ship.trp_ts + ship.trp_cd then
+							ship.fire_trpd = true
+	
+	--here2
+							ship.trp_ts = time()
+							print("detected") 																
+					 end
+					end									
+																					
+				end
+				arc.r+=0.5
+				if(arc.r > ship.radi/2)	arc.clr = 3
+				if(arc.r > ship.radi)	del(ship.arcs_tbl,arc)	
+			end	
+		end	
+	end
+	
+end
+
+-----------torpedo---
+
+function trpd_init()
 	trpd_tbl = {}								
 	end		
 	
@@ -874,30 +995,30 @@ __gfx__
 00004a00d55222222222222525b56b57111111110000000077766777777777722222222200000000007771166660017700777116666000000077711666600000
 000004a0500555555555555055355355111111110000000026777776777776222222222200000000000766110000077000076611000000000007661100000000
 00000040000000000000000044444444111111110000000022666662666662222222222200000000000000000000000000000001100000000000000110000000
-00000000000000000000000000000000000000000000000000000000666666660000000000000000000000000060000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000006666666660000000000000000000000000c15000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000666666666660000000000000000006666666dd6006000000000000000000000000000000000
-000000000000000000000000000000000000000000000000000666666666666600000000000000008ddddddddddddd5600000000000000000000000000000000
-00000000000000000000000000000000000000000000000006666666666666660000000000000000288888888888885000000000000000000000000000000000
-00000000000000000000000000000000000000000000000666666666666666660000000000000000022222222222220500000000000000000000000000000000
-00000000000000000000000000000000000000000000066666666666666666670000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000006666666666666666666770000000000000000000000000000000000000000000000000000000000000000
-0000000000000000000000000000000000000000007777777777777777777777000000000004000000000000000000000000000000066600cccccccccccccccc
-000000000000000000000000000000000000000007666666666666666666666700000000006d50000000064000000000000000000000600077777cc7cccccccc
+00000000000000000000000000000000000000002222222222222222666666660000000000000000000000000060000000000000000000000000000000000000
+00000000000000000000000000000000000000002222222222222226666666660000000000000000000000000c15000000000000000000000000000000000000
+00000000000000000000000000000000000000002222222222222666666666660000000000000000006666666dd60060000bbbbbbbb00b000000000000000000
+000000000000000000000000000000000000000022222222222666666666666600000000000000008ddddddddddddd5600bbbbbbbbbbbb000000000000000000
+00000000000000000000000000000000000000002222222226666666666666660000000000000000288888888888885000bbbbbbbbbbbb000000000000000000
+000000000000000000000000000000000000000022222226666666666666666600000000000000000222222222222205000bbbbbbbb00b000000000000000000
+00000000000000000000000000000000000000002222266666666666666666670000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000002226666666666666666666770000000000000000000000000000000000000000000000000000000000000000
+0000000000000000000000000000000000000000227777777777777777777777000000000004000000000000000000000000000000066600cccccccccccccccc
+000000000000000000000000000000000000000027666666666666666666666700000000006d50000000064000000000000000000000600077777cc7cccccccc
 00000000000000000000000000000000000000006666666666666666666666d60000000000d520000000d5206d6d6d600000000000066600cccccc7cc77777cc
 00000000000000000000000000000000000000005666666666666666666666d500000000006d50000006520005d5d5d40000000000006000c777777cc777777c
 00000000000000000000000000000000000000005666666666666666666666d50000000000d5200000d52000525252500000000000666660c7777777cccc777c
 00000000000000000000000000000000000000005666667777777777666666d500000000006d500006520000000000000000000000555550cc77777cc00ccccc
 0000000000000000000000000000000000000000566667dddddddddd766666d50000000000d5200000200000000000000000000000666660ccc7cccc0dd0cccc
-0000000000000000000000000000000000000000566667d500000000766666d5000000000060500000000000000000000000000000066600cccccccc0d50cccc
-0e0e00000333b3b3555555555555555500000000566667d500000000766666d5000065000000a50000000000000065000000000000d666d0cc00ccc05550c0cc
-008000e0b3363633555d555555d555d500000000566667d500000000766666d5000060000000a0000000000000006000ddddddddddddddddcc08000ddddd080c
-0e08280036355536555d55d5555d555500000000566667d500000000766666d560066660a00aaaa000000000600666600066666666666666ccc0055dd55d550c
-0085528e6535d555d55555d5555d555500000000566667d500000000766666d5566dddd65aa9999a00000000566dddd6000ddd555d5d5ddd0000555ddddd5550
-025252005d555555d5d5d555555555d500000000566667d500000000766666d5655dddd56449999400000000655dddd50000dddd5d555dd0dddddddddddddddd
-5552255555555d5505dd5d5d5d555d5500000000566667d500000000766666d550055550400444400000000050055550000000dd5ddd5d000666666666666660
-5525555555d555550d0d00d055d5555500000000566667d500000000766666d5000000000000000000000000000000000000000888888000c0dddddddddddd0c
-555555555555555d00000000d555555500000000566667d500000000766666d5000000000000000000000000000000000000000000000000cc088888888880cc
+0000000000000000000000000000000000000000566667d555555555766666d5000000000060500000000000000000000000000000066600cccccccc0d50cccc
+0e0e00000333b3b3555555555555555500000000566667d555555555766666d5000065000000a50000000000000065000000000000d666d0cc00ccc05550c0cc
+008000e0b3363633555d555555d555d500000000566667d555555555766666d5000060000000a0000000000000006000ddddddddddddddddcc08000ddddd080c
+0e08280036355536555d55d5555d555500000000566667d555555555766666d560066660a00aaaa000000000600666600066666666666666ccc0055dd55d550c
+0085528e6535d555d55555d5555d555500000000566667d555555555766666d5566dddd65aa9999a00000000566dddd6000ddd555d5d5ddd0000555ddddd5550
+025252005d555555d5d5d555555555d500000000566667d555555555766666d5655dddd56449999400000000655dddd50000dddd5d555dd0dddddddddddddddd
+5552255555555d5505dd5d5d5d555d5500000000566667d555555555766666d550055550400444400000000050055550000000dd5ddd5d000666666666666660
+5525555555d555550d0d00d055d5555500000000566667d555555555766666d5000000000000000000000000000000000000000888888000c0dddddddddddd0c
+555555555555555d00000000d555555500000000566667d555555555766666d5000000000000000000000000000000000000000000000000cc088888888880cc
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
@@ -1125,18 +1246,18 @@ cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111
 
 __gff__
-0080800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000101000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0080800000000000000004040404040400000000000404040000040404040000000000000004040400000000000000000101000000040204000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 __map__
 0808060708080808080808080808080808080808080808080808080808080808080808080808080806070808080808080808080808080808080808080808080808080808080808080808080808080808080808080806070808080808080808080808080808080808080808080808080808080808080808060708080808080808
 0808080808080808080808080808080607080808080808080808080607080808080808080808080808080808080808080808080808080808080808080808080808080808080808080607080808080808080808080808080808080808080806070808080808080808080806070808080808080808080808080808080808080808
 0808080808080808080808060708080808080808080808080808080808080808080808080808080808080808080808080808080808080806070808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808
 0808080806070808080808080808080808080607080808080808080808080808080808060708080808080808060708080806070808080808080808080808080607080808080808080808080808080808060708080808080808060708080808080806070808080808080808080808080808080607080808080808080607080808
-0808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808
-0505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505
-7f7f7f7f7f7f7f7f7f050505050505057f7f7f7f7f7f7f7f7f7f7f7f7f7f7f057f7f7f7f7f7f7f7f7f7f7f7f7f0505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505
-7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f0505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505053105050505050505050505151617
-7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f307f7f7f7f7f7f7f7f7f7f7f7f7f7f7f317f7f7f7f7f7f0505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050531313305050505050505050500252627
+0808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808252627
+0505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505353637
+7f7f7f7f7f7f7f7f7f050505050505057f7f7f7f7f7f7f7f7f7f7f7f7f7f7f057f7f7f7f7f7f7f7f7f7f7f7f7f0505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505353637
+7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f0505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505053105050505050505050505353637
+7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f307f7f7f7f7f7f7f7f7f7f7f7f7f7f7f317f7f7f7f7f7f0505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050531313305050505050505050500353637
 7f7f7f7f7f7f7f7f307f7f7f7f7f7f7f7f7f7f7f7f30333131317f7f7f7f7f7f7f7f7f7f7f3133317f7f7f7f7f0505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505053133333305050505050505050500353637
 7f7f7f317f7f133133317f7f7f7f7f7f307f7f7f303331333331317f7f7f31313131313131333333317f7f7f7f0505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505313131313131310505050505313333313331050505050505050500353637
 0505313331003133313305050505053030317f3031333333333331317f313333333333333333333333317f31313131313131313131313124242405050505050530303030300505050505050505050505050505050505050505050505050505050531313333333333313105050531333333313333050505050505050500353637
@@ -1144,22 +1265,22 @@ __map__
 3333333333333133333333333333333333333333333333333333333333333333333331313131313131313133313331333133333333333333333305050530333333333333333333300505050505050531313331333333333333313131050531313333333333333333333333333131333131313333330505050505050500353637
 3333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333331310533333333333333333333333330303131313133333333333333333333333331313131333333333333333333333333333333313133313331313131310505053131313131
 3232323232323232323232323232323232323232323232323232323232323232323232323232323232323232323232323232323232323232323233313133333333333333333333333333333133333333333333333333333333333333333333333333333333333333333333333333333131313133333333333131313133333333
-08080808080808080808080808080808080808080808080808080808080808087f7f7f7f7f12127f7f7f7f7f7f0505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505
-08080808080808080808080808080808080808080808080808080808080808087f7f7f7f7f7f7f7f7f7f7f7f7f0505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505
-08080808080808080808080808080808080808080808080808080808080808087f7f7f7f7f7f7f7f7f7f7f7f7f0505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505
-08080808080808080808080808080808080808080808080808080808080808087f7f7f7f7f7f7f7f7f7f7f7f7f0505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505
-08080808080808080808080808080808080808080808080808080808080808087f7f7f7f7f7f7f7f7f7f7f7f7f0505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505
-08080808080808080808080808080808080808080808080808080808080808087f7f7f7f7f7f7f7f7f7f7f7f7f0505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505
-03030303030303030303030303030303030303030303030303030303030303037f7f7f7f7f7f7f7f7f7f7f7f7f0505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505
-04040404040404040404040404040404040404040404040404040404040404047f7f7f7f7f7f7f7f7f7f7f7f7f0505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505
-04040404040404040404040404040404040404040404040404040404040404047f7f7f7f7f7f7f7f7f7f7f7f7f0505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505
-0404040404040404040404040404040404040404040404040404040404040404050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505
-0404040404040404040404040404040404040404040404040404040404040404050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505
-0404040404040404040404040404040404040404040404040404040404040404050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505
-0404040404040404040404040404040404040404040404040404040404040404050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505
-0404040404040404040404040404040404040404040404040404040404040404050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505
-0404040404040404040404040404040404040404040404040404040404040404050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505
-0404040404040404040404040404040404040404040404040404040404040404050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505
+0808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505
+0808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505
+0808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505
+0808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505
+0808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505
+0808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505
+0303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505
+0404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505
+0404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505
+0404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505
+0404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505
+0404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505
+0404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505
+0404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505
+0404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505
+0404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505
 __sfx__
 000400000e5710e5720e5730d5730c5730a57309573075630555304543035320352203512035110451106521095300f550335701b57001577005773e500005000050000500005000050000500005000050000500
 001000000000000000000000000000000000000000000000000002845000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
